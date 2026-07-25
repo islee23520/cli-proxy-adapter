@@ -1,170 +1,249 @@
 # pi-proxy-models
 
 **This is [islee23520/pi-proxy-models](https://github.com/islee23520/pi-proxy-models)** —
-a maintained fork of the upstream
-[victormilk/pi-proxy-models](https://github.com/victormilk/pi-proxy-models)
-project. Development and releases for this line live on the fork only.
+a maintained fork of
+[victormilk/pi-proxy-models](https://github.com/victormilk/pi-proxy-models).
+Development for this line lives on the fork only.
 
-A [pi-coding-agent](https://github.com/badlogic/pi-mono) extension that exposes
-[CLIProxyAPIPlus](https://github.com/router-for-me/CLIProxyAPIPlus) models to
-`pi`'s model picker through CLIProxy's unified OpenAI-compatible `/v1` surface.
+Bridge that exposes [CLIProxyAPIPlus](https://github.com/router-for-me/CLIProxyAPIPlus)
+models to **two agent hosts** from one repo:
 
-That means you can `/login` to Claude Code, Gemini CLI, OpenAI Codex, GitHub
-Copilot, Kiro, GLM, etc. inside CLIProxyAPIPlus once, and then consume all of
-those subscriptions from `pi` under a single provider name.
+| Host | What you install | Artifact |
+|------|------------------|----------|
+| **pi agent** ([pi-coding-agent](https://github.com/badlogic/pi-mono)) | TypeScript extension | `index.ts` |
+| **Grok** (rust `grok` / pi-agent CLI) | Grok plugin | `plugins/grok/cliproxy-api-provider` |
 
-## One provider
+Log in once inside CLIProxyAPIPlus (Claude Code, Gemini CLI, OpenAI Codex,
+Copilot, Kiro, GLM, Kimi, …). Both hosts then consume those subscriptions
+through CLIProxy’s unified OpenAI-compatible `/v1` surface.
 
-CLIProxyAPIPlus already unifies every backend behind OpenAI Chat Completions at
-`/v1`, so this extension registers **one** provider for every discovered model:
+Shared catalog SSOT: `~/.agents/references/model-catalog.json`  
+(live model **ids** still come from CLIProxy `/v1/models`).
 
-| Provider   | Models                         | pi API               | base path  |
-| ---------- | ------------------------------ | -------------------- | ---------- |
-| `cliproxy` | Claude, Gemini, OpenAI, Grok, GLM, Kimi, … | `openai-completions` | `<url>/v1` |
+## Prerequisite: CLIProxyAPIPlus
 
-Each model carries a shared compat block (`supportsStore: false`,
-`supportsDeveloperRole: false`, `maxTokensField: "max_tokens"`,
-`supportsReasoningEffort: true`) so backends that reject OpenAI-only fields
-(e.g. Kimi K3) still tokenize cleanly.
+Both install paths need a running proxy. See the
+[CLIProxyAPIPlus README](https://github.com/router-for-me/CLIProxyAPIPlus)
+for Docker / compose setup.
 
-Legacy names `cliproxy-openai` and `cliproxy-gemini` are unregistered on load
-and on `/cliproxy-refresh`.
-
-## Install
-
-> Requires a running CLIProxyAPIPlus instance. See
-> [the upstream README](https://github.com/router-for-me/CLIProxyAPIPlus) for
-> Docker/`docker-compose` setup.
-
-Drop the single file into pi's global extension directory:
+Quick check:
 
 ```bash
-# from this repo
-mkdir -p ~/.pi/agent/extensions/cliproxy
-ln -sf "$(pwd)/index.ts" ~/.pi/agent/extensions/cliproxy/index.ts
+curl -s "$CLIPROXY_URL/v1/models" | jq '.data | length'
+# or, if your proxy is local:
+# curl -s http://127.0.0.1:8317/v1/models | jq '.data | length'
 ```
 
-or copy instead of symlinking if you prefer:
+There is **no hardcoded default URL**. You must set the base URL via env or
+config for each host (see below).
+
+---
+
+## Install for pi agent
+
+Registers a single provider name: **`cliproxy`**
+(`openai-completions` + `/v1`). Every discovered model appears under it
+(e.g. `cliproxy/kimi-k3`, `cliproxy/grok-4.5`).
+
+### 1. Install the extension
+
+From this repo root:
 
 ```bash
+# preferred
+pi install .
+
+# fallback if `pi install` is unavailable
 mkdir -p ~/.pi/agent/extensions/cliproxy
-cp index.ts ~/.pi/agent/extensions/cliproxy/index.ts
+ln -sfn "$(pwd)/index.ts" ~/.pi/agent/extensions/cliproxy/index.ts
 ```
 
-For quick one-shot testing without installing:
+One-shot test without installing:
 
 ```bash
 pi -e ./index.ts
 ```
 
-## Configure
+### 2. Configure the proxy URL
 
-The extension reads its config in this order (first match wins):
+First match wins:
 
-1. Environment variables `CLIPROXY_URL` and `CLIPROXY_API_KEY`
-2. `~/.pi/agent/cliproxy.json`:
-   ```json
-   {
-     "baseUrl": "http://localhost:8317"  # example,
-     "apiKey": "your-api-key"
-   }
-   ```
-3. No default — `baseUrl` must be set via env or config file
+1. `CLIPROXY_URL` / `CLIPROXY_API_KEY`
+2. `~/.pi/agent/cliproxy.json`
 
-A missing/empty API key is **tolerated** — the extension passes a placeholder
-downstream. CLIProxyAPIPlus accepts any value when its own `api-keys:` list is
-empty. When `api-keys:` is populated, set `CLIPROXY_API_KEY` to one of those
-values.
-
-Examples:
+Env:
 
 ```bash
-# Env-based (remote proxy with auth)
-export CLIPROXY_URL=https://my-proxy.example.com
-export CLIPROXY_API_KEY=abc123
-pi
-
-# File-based (persistent local config)
-cat > ~/.pi/agent/cliproxy.json <<EOF
-{ "baseUrl": "http://localhost:8317"  # example, "apiKey": "dev-key" }
-EOF
-pi
+export CLIPROXY_URL=https://your-proxy.example.com
+export CLIPROXY_API_KEY=your-key   # optional if proxy has empty api-keys
 ```
 
-## Usage
+Or file (`~/.pi/agent/cliproxy.json`):
 
-Start `pi` and pick a model with `Ctrl+P` or `/model`:
-
-```
-cliproxy/claude-sonnet-4-5
-cliproxy/claude-opus-4-5
-cliproxy/gemini-2.5-pro
-cliproxy/gpt-5-codex
-cliproxy/kimi-k3
-...
+```json
+{
+  "baseUrl": "https://your-proxy.example.com",
+  "apiKey": "your-key"
+}
 ```
 
-Or via flag:
+Missing API key is tolerated (placeholder is sent). If the proxy’s
+`api-keys:` list is non-empty, set a matching key.
+
+### 3. Use it
 
 ```bash
-pi --provider cliproxy --model claude-sonnet-4-5
-pi --provider cliproxy --model gemini-2.5-pro
-pi --provider cliproxy --model gpt-4o
+pi --list-models cliproxy
 pi --provider cliproxy --model kimi-k3
+pi --provider cliproxy --model grok-4.5
+pi --provider cliproxy --model glm-5.2
 ```
 
-### Slash commands
+In a session: `Ctrl+P` / `/model`, then pick a `cliproxy/…` model.
 
-| Command             | Description                                              |
-| ------------------- | -------------------------------------------------------- |
-| `/cliproxy-status`  | Ping the proxy, show model count + auth info             |
-| `/cliproxy-models`  | List all discovered models grouped by `owned_by`         |
-| `/cliproxy-refresh` | Re-fetch the model list and re-register all providers    |
+| Slash command | Effect |
+|---------------|--------|
+| `/cliproxy-status` | Ping proxy, model count, auth info |
+| `/cliproxy-models` | List models grouped by `owned_by` |
+| `/cliproxy-refresh` | Re-fetch `/v1/models` and re-register |
 
-### Listing models from the CLI
+Legacy provider names `cliproxy-openai` and `cliproxy-gemini` are unregistered
+on load and on `/cliproxy-refresh`.
+
+Each model carries a shared compat block so backends that reject OpenAI-only
+fields (e.g. Kimi K3) still tokenize cleanly:
+`supportsStore: false`, `supportsDeveloperRole: false`,
+`maxTokensField: "max_tokens"`, plus reasoning-effort where supported.
+
+---
+
+## Install for Grok
+
+Installs the **`cliproxy-api-provider`** plugin. It keeps
+`~/.grok/config.toml` `[model.*]` tables in sync with the catalog + live
+`/v1/models`, so context windows and reasoning effort work when
+`[endpoints].models_base_url` points at CLIProxy.
+
+### 1. Install the plugin
+
+From this repo root:
 
 ```bash
-pi --list-models cliproxy   # every model the proxy serves
+grok plugin install ./plugins/grok/cliproxy-api-provider --trust
+grok plugin enable cliproxy-api-provider
 ```
+
+Fallback if the CLI cannot install:
+
+```bash
+mkdir -p ~/.grok/plugins
+ln -sfn "$(pwd)/plugins/grok/cliproxy-api-provider" \
+  ~/.grok/plugins/cliproxy-api-provider
+```
+
+### 2. Enable in user config
+
+`~/.grok/config.user.toml`:
+
+```toml
+[plugins]
+enabled = ["lfg", "cliproxy-api-provider"]
+```
+
+### 3. Point Grok at CLIProxy
+
+Either set env for the sync script:
+
+```bash
+export CLIPROXY_BASE_URL=https://your-proxy.example.com/v1
+export XAI_API_KEY=your-key   # if the proxy requires it
+```
+
+or leave `baseUrl` unset and reuse an existing
+`[endpoints].models_base_url` in `~/.grok/config.toml`, or set plugin
+config (`~/.grok/plugin-data/cliproxy-api-provider/config.json` or the
+plugin’s `config.json`):
+
+```json
+{
+  "baseUrl": "https://your-proxy.example.com/v1",
+  "defaultModel": "grok-4.5",
+  "webSearch": "grok-4.20-multi-agent-0309",
+  "defaultReasoningEffort": "high",
+  "envKey": "XAI_API_KEY"
+}
+```
+
+### 4. Sync models
+
+```bash
+node ./plugins/grok/cliproxy-api-provider/scripts/sync-models.mjs --force
+```
+
+After install, SessionStart also runs the sync. In a Grok session:
+`/cliproxy-sync`.
+
+Then open Grok and pick a CLIProxy model (default pin: `grok-4.5`).
+
+Deeper layout / catalog editing: [PLUGINS.md](./PLUGINS.md) and
+[plugins/grok/cliproxy-api-provider/README.md](./plugins/grok/cliproxy-api-provider/README.md).
+
+---
+
+## Install both (pi agent + Grok)
+
+```bash
+git clone https://github.com/islee23520/pi-proxy-models.git
+cd pi-proxy-models
+./scripts/install-all.sh
+```
+
+That script:
+
+1. Installs the pi extension (`pi install .` or symlink fallback)
+2. Installs/enables the Grok plugin (or symlink fallback)
+3. Ensures `cliproxy-api-provider` is in `[plugins].enabled`
+4. Runs `sync-models.mjs --force`
+
+You still must set **pi** `CLIPROXY_URL` / `~/.pi/agent/cliproxy.json` and
+**Grok** `CLIPROXY_BASE_URL` (or plugin / `models_base_url`) yourself.
+
+---
 
 ## Behaviour notes
 
-- **Model metadata** (`contextWindow`, `maxTokens`, `reasoning`, image input)
-  is inferred from the model ID; costs are set to `0` because upstream accounts
-  are paid via subscription, not tokens.
-- **Startup resilience** — if the proxy is unreachable at launch, the
-  extension still loads with a small static fallback list and warns the user.
-  Run `/cliproxy-refresh` once the proxy is back online.
-- **No Bearer header is added by pi** — each native SDK sends its own auth
-  (Anthropic `x-api-key`, OpenAI `Authorization: Bearer`, Google
-  `x-goog-api-key`) using the configured key.
+- **Metadata** (`contextWindow`, `maxTokens`, reasoning, image) comes from
+  `MODEL_METADATA` / the catalog; costs are `0` (subscription, not token bill).
+- **pi startup** — if the proxy is down at load, the extension still registers
+  with a static fallback list (no noisy console warn before the host owns I/O).
+  Use `/cliproxy-refresh` when the proxy is up.
+- **Grok sync** — if the proxy is down, the hook skips and leaves config alone.
+- Auth headers are host/SDK-specific; pi does not invent a global Bearer for
+  every backend.
 
 ## Troubleshooting
 
-**`CLIProxy unreachable`** — verify the proxy is listening:
+**Proxy unreachable (pi)**
+
 ```bash
-curl -s http://localhost:8317/v1/models  # example endpoint | jq '.data | length'
+curl -s "${CLIPROXY_URL:-http://127.0.0.1:8317}/v1/models" | jq '.data | length'
 ```
 
-**`302 Found` / `unauthorized` from Gemini or OpenAI** — CLIProxyAPIPlus is
-forwarding to the upstream API with an unauthenticated token. Check that you
-have an account linked for that provider in your proxy's `auths/` directory,
-or set a valid key that matches the proxy's `api-keys:` list.
+**`302` / `unauthorized`** — link the upstream account in the proxy `auths/`
+dir, or use a key that matches the proxy’s `api-keys:` list.
 
-**Models don't appear after starting CLIProxy** — run `/cliproxy-refresh` in a
-running pi session, or restart pi.
+**Models missing in pi** — `/cliproxy-refresh` or restart `pi`.
+
+**Models wrong in Grok** — re-run:
+
+```bash
+node ~/.grok/plugins/cliproxy-api-provider/scripts/sync-models.mjs --force
+```
+
+**`baseUrl not set` (Grok sync)** — set `CLIPROXY_BASE_URL`, plugin
+`config.json` `baseUrl`, or `[endpoints].models_base_url` in
+`~/.grok/config.toml`.
 
 ## License
 
-MIT
-
-## Grok / rust pi agent
-
-This package also ships a **Grok plugin** (for the rust `grok` CLI) that keeps
-`~/.grok/config.toml` model mappings synced from the same catalog SSOT.
-
-See [PLUGINS.md](./PLUGINS.md) and run:
-
-```bash
-./scripts/install-all.sh
-```
+ISC (package); see upstream project for original licensing context.

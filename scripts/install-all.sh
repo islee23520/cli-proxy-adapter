@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install pi-proxy-models for both:
+# Install cli-proxy-adapter for both:
 #   - pi coding-agent (TS extension: index.ts)
 #   - grok / rust-pi agent (cliproxy-api-provider plugin)
 set -euo pipefail

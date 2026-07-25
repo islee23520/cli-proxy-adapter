@@ -1,14 +1,14 @@
 {
-	"name": "pi-proxy-models",
+	"name": "cli-proxy-adapter",
 	"version": "0.0.4",
-	"description": "islee23520 fork of pi-proxy-models — CLIProxyAPIPlus model bridge for pi (TS extension) and Grok/rust-pi (cliproxy-api-provider plugin). Catalog SSOT: ~/.agents/references/model-catalog.json. Families: Claude, Gemini, OpenAI/Codex, Grok, GLM, Kimi, \u2026",
-	"homepage": "https://github.com/islee23520/pi-proxy-models#readme",
+	"description": "islee23520/cli-proxy-adapter — CLIProxyAPIPlus bridge for pi agent (TS extension) and Grok (cliproxy-api-provider plugin). Catalog SSOT: ~/.agents/references/model-catalog.json. Families: Claude, Gemini, OpenAI/Codex, Grok, GLM, Kimi, \u2026",
+	"homepage": "https://github.com/islee23520/cli-proxy-adapter#readme",
 	"bugs": {
-		"url": "https://github.com/islee23520/pi-proxy-models/issues"
+		"url": "https://github.com/islee23520/cli-proxy-adapter/issues"
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/islee23520/pi-proxy-models.git"
+		"url": "git+https://github.com/islee23520/cli-proxy-adapter.git"
 	},
 	"license": "ISC",
 	"author": "islee23520",

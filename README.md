@@ -1,9 +1,9 @@
-# pi-proxy-models
+# cli-proxy-adapter
 
-**This is [islee23520/pi-proxy-models](https://github.com/islee23520/pi-proxy-models)** —
-a maintained fork of
+**This is [islee23520/cli-proxy-adapter](https://github.com/islee23520/cli-proxy-adapter)**
+(renamed from `pi-proxy-models`) — a maintained fork of
 [victormilk/pi-proxy-models](https://github.com/victormilk/pi-proxy-models).
-Development for this line lives on the fork only.
+Development for this line lives on this repo only.
 
 Bridge that exposes [CLIProxyAPIPlus](https://github.com/router-for-me/CLIProxyAPIPlus)
 models to **two agent hosts** from one repo:
@@ -193,8 +193,8 @@ Deeper layout / catalog editing: [PLUGINS.md](./PLUGINS.md) and
 ## Install both (pi agent + Grok)
 
 ```bash
-git clone https://github.com/islee23520/pi-proxy-models.git
-cd pi-proxy-models
+git clone https://github.com/islee23520/cli-proxy-adapter.git
+cd cli-proxy-adapter
 ./scripts/install-all.sh
 ```
 

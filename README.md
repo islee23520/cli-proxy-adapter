@@ -1,5 +1,10 @@
 # pi-proxy-models
 
+**This is [islee23520/pi-proxy-models](https://github.com/islee23520/pi-proxy-models)** —
+a maintained fork of the upstream
+[victormilk/pi-proxy-models](https://github.com/victormilk/pi-proxy-models)
+project. Development and releases for this line live on the fork only.
+
 A [pi-coding-agent](https://github.com/badlogic/pi-mono) extension that exposes
 [CLIProxyAPIPlus](https://github.com/router-for-me/CLIProxyAPIPlus) models to
 `pi`'s model picker through CLIProxy's unified OpenAI-compatible `/v1` surface.

@@ -251,7 +251,7 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"claude-sonnet-4-6": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
 	"gemini-3-flash": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-3-flash-agent": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
-	"gemini-3.1-flash-image": { reasoning: false, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
+	"gemini-3.1-flash-image": { reasoning: false, input: ["text", "image"], contextWindow: 131_072, maxTokens: 32_768 },
 	"gemini-3.1-flash-lite": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-3.1-pro-low": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-3.5-flash-extra-low": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
@@ -279,13 +279,13 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"grok-imagine-video-1.5-preview": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"codex-auto-review": { reasoning: true, input: ["text"], contextWindow: 272_000, maxTokens: 128_000 },
 	"gpt-5.3-codex-spark": { reasoning: true, input: ["text"], contextWindow: 128_000, maxTokens: 32_000 },
-	"gpt-5.4": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
+	"gpt-5.4": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-5.4-mini": { reasoning: true, input: ["text", "image"], contextWindow: 400_000, maxTokens: 128_000 },
-	"gpt-5.5": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
-	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
-	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
-	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
-	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 32_768 },
+	"gpt-5.5": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 131_072 },
 	"gpt-image-1.5": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"gpt-image-2": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"glm-4.5": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 98_304 },
@@ -345,6 +345,7 @@ function inferLimits(id: string): { contextWindow: number; maxTokens: number } {
 	if (l.includes("kimi-k2.7") || l.includes("kimi-k2.6") || l.includes("kimi-k2.5") || l.includes("kimi-k2-thinking")) return { contextWindow: 262_144, maxTokens: 262_144 };
 	if (l.includes("kimi-k2")) return { contextWindow: 131_072, maxTokens: 16_384 };
 	if (l.includes("claude")) return { contextWindow: 1_000_000, maxTokens: 128_000 };
+	if (l.includes("flash-image")) return { contextWindow: 131_072, maxTokens: 32_768 };
 	if (l.includes("gemini-2.5") || l.includes("gemini-3")) return { contextWindow: 1_048_576, maxTokens: 65_536 };
 	if (l.includes("gemini")) return { contextWindow: 1_048_576, maxTokens: 8_192 };
 	if (l.includes("grok-4.20") || l.includes("grok-4.3")) return { contextWindow: 1_000_000, maxTokens: 1_000_000 };
@@ -355,6 +356,7 @@ function inferLimits(id: string): { contextWindow: number; maxTokens: number } {
 	if (l.includes("glm-4.6") || l.includes("glm-4.7") || l.includes("glm-5")) return { contextWindow: 200_000, maxTokens: 131_072 };
 	if (l.includes("glm-4.5")) return { contextWindow: 131_072, maxTokens: 98_304 };
 	if (l.includes("glm")) return { contextWindow: 200_000, maxTokens: 131_072 };
+	if (l.includes("gpt-5.4") || l.includes("gpt-5.5") || l.includes("gpt-5.6")) return { contextWindow: 1_050_000, maxTokens: 128_000 };
 	if (l.includes("gpt-5")) return { contextWindow: 272_000, maxTokens: 128_000 };
 	if (l.includes("gpt-4.1")) return { contextWindow: 1_000_000, maxTokens: 32_768 };
 	if (l.includes("gpt-4o")) return { contextWindow: 128_000, maxTokens: 16_384 };
@@ -575,10 +577,6 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		models = await fetchModels(cfg);
 	} catch (err) {
 		initError = (err as Error).message;
-		console.warn(
-			`[cliproxy] Could not reach CLIProxyAPIPlus at ${cfg.baseUrl}: ${initError}. ` +
-				`Using fallback model list; run /cliproxy-refresh once the proxy is up.`,
-		);
 		models = fallbackModels();
 	}
 

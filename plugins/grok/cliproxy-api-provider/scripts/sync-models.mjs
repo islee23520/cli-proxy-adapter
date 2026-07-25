@@ -49,7 +49,7 @@ const DEFAULT_MANAGED_TOML = path.join(
 const DEFAULT_USER_CONFIG = path.join(HOME, ".grok", "config.user.toml");
 
 const DEFAULTS = {
-  baseUrl: "http://127.0.0.1:8317/v1",
+  baseUrl: "",  // must come from config.json or CLIPROXY_BASE_URL
   defaultModel: "grok-4.5",
   webSearch: "grok-4.20-multi-agent-0309",
   defaultReasoningEffort: "high",
@@ -181,6 +181,14 @@ function effortSupport(mid, catalog) {
   // proxy acceptance still wins for edge cases (handled by hard excludes above).
   const cat = catalog.byId.get(mid) || catalog.byId.get(slug);
   const catSaysNo = cat && cat.reasoning === false;
+
+  // Vendor-docs effort vocabulary (model-catalog.json `reasoningEffort`) wins
+  // over family heuristics: `false` = reasoning_effort unsupported (e.g. Kimi
+  // K2.x, where only K3 accepts it), otherwise { default, efforts } verbatim.
+  if (cat && cat.reasoningEffort === false) return null;
+  if (cat && cat.reasoningEffort && Array.isArray(cat.reasoningEffort.efforts)) {
+    return { default: cat.reasoningEffort.default || "high", efforts: cat.reasoningEffort.efforts };
+  }
 
   const isGpt = slug.startsWith("gpt-5.") || slug.startsWith("gpt-oss");
   const isGrok = slug.startsWith("grok-");
@@ -563,8 +571,17 @@ async function main() {
   }
 
   const cfg = loadPluginConfig();
-  const baseUrl = process.env.CLIPROXY_BASE_URL || cfg.baseUrl;
   const configPath = expandHome(process.env.GROK_CONFIG || cfg.configPath);
+  const existing = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
+  const configuredBaseUrl = existing.match(
+    /^models_base_url\s*=\s*["']([^"']+)["']/m,
+  )?.[1];
+  const baseUrl = process.env.CLIPROXY_BASE_URL || cfg.baseUrl || configuredBaseUrl;
+  if (!baseUrl) {
+    throw new Error(
+      `baseUrl not set. Set CLIPROXY_BASE_URL, plugin config baseUrl, or [endpoints].models_base_url in ${configPath}.`,
+    );
+  }
   const userConfigPath = expandHome(
     process.env.GROK_USER_CONFIG || cfg.userConfigPath || DEFAULT_USER_CONFIG,
   );
@@ -598,7 +615,6 @@ async function main() {
 
   const fp = fingerprint(ids, baseUrl, catalog);
   const cache = readCache(cfg.cachePath);
-  const existing = fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "";
   const hasManaged = existing.includes(BEGIN) && existing.includes(END);
   const managedExists = fs.existsSync(managedTomlPath);
 

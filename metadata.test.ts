@@ -65,4 +65,10 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(model.compat.reasoningEffortMap).toEqual({ minimal: "low", low: "low", medium: "high", high: "high", xhigh: "max" });
 	});
 
+	test("gpt-5.6-sol uses the 1.05M context window, not the 272K pricing threshold", () => {
+		const m = resolveModelMetadata("gpt-5.6-sol");
+		expect(m.contextWindow).toBe(1_050_000);
+		expect(m.maxTokens).toBe(128_000);
+	});
+
 });

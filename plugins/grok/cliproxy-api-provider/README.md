@@ -54,8 +54,8 @@ For each CLIProxy model id:
 | `base_url` | plugin config / `CLIPROXY_BASE_URL` |
 | `env_key` | plugin config (`XAI_API_KEY`) |
 | `context_window` | **`model-catalog.json`** (heuristic fallback only if missing) |
-| `supports_reasoning_effort` | family rules + catalog `reasoning` |
-| `reasoning_effort` / `reasoning_efforts` | family defaults |
+| `supports_reasoning_effort` | catalog `reasoningEffort` (vendor docs) → family rules fallback |
+| `reasoning_effort` / `reasoning_efforts` | catalog `reasoningEffort` vocabulary → family defaults |
 
 Also sets:
 
@@ -93,7 +93,7 @@ Optional overrides (first found wins):
 
 ```json
 {
-  "baseUrl": "http://127.0.0.1:8317/v1"  # example,
+  "baseUrl": "http://127.0.0.1:8317/v1",
   "defaultModel": "grok-4.5",
   "webSearch": "grok-4.20-multi-agent-0309",
   "defaultReasoningEffort": "high",
@@ -103,6 +103,10 @@ Optional overrides (first found wins):
   "userConfigPath": "~/.grok/config.user.toml"
 }
 ```
+
+If `baseUrl` is omitted, the sync script reuses the active
+`[endpoints].models_base_url` from `~/.grok/config.toml`. This keeps existing
+Grok proxy setups working without duplicating the endpoint in plugin config.
 
 Env:
 

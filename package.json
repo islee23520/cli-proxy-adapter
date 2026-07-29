@@ -1,7 +1,7 @@
 {
 	"name": "cli-proxy-adapter",
 	"version": "0.0.4",
-	"description": "islee23520/cli-proxy-adapter — CLIProxyAPIPlus bridge for pi agent (TS extension) and Grok (cliproxy-api-provider plugin). Catalog SSOT: ~/.agents/references/model-catalog.json. Families: Claude, Gemini, OpenAI/Codex, Grok, GLM, Kimi, \u2026",
+	"description": "islee23520/cli-proxy-adapter — CLIProxyAPIPlus bridge for Senpi/pi-agent variants (TS extension) and Grokomo/GrokBuild CLI variants (cliproxy-api-provider plugin). Catalog SSOT: ~/.agents/references/model-catalog.json. Families: Claude, Gemini, OpenAI/Codex, Grok, GLM, Kimi, \u2026",
 	"homepage": "https://github.com/islee23520/cli-proxy-adapter#readme",
 	"bugs": {
 		"url": "https://github.com/islee23520/cli-proxy-adapter/issues"
@@ -19,7 +19,10 @@
 	"keywords": [
 		"pi-package",
 		"pi",
-		"pi-coding-agent"
+		"pi-coding-agent",
+		"senpi",
+		"grokomo",
+		"grokbuild"
 	],
 	"pi": {
 		"extensions": [
@@ -30,7 +33,9 @@
 		"@mariozechner/pi-coding-agent": "^0.67.68"
 	},
 	"scripts": {
-		"test": "bun test"
+		"test": "bun test",
+		"verify:hosts": "bun scripts/verify-hosts.ts",
+		"check": "bun test && bun scripts/verify-hosts.ts"
 	},
 	"files": [
 		"index.ts",

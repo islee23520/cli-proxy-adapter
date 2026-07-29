@@ -1,42 +1,56 @@
 #!/usr/bin/env bash
-# Install cli-proxy-adapter for both:
-#   - pi coding-agent (TS extension: index.ts)
-#   - grok / rust-pi agent (cliproxy-api-provider plugin)
+# Install cli-proxy-adapter for both supported host families:
+#   - senpi / pi-agent variants (TS extension: index.ts)
+#   - grokomo / GrokBuild CLI variants (cliproxy-api-provider plugin)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GROK_PLUGIN_SRC="$ROOT/plugins/grok/cliproxy-api-provider"
 
-echo "[install] pi extension from $ROOT"
-if command -v pi >/dev/null 2>&1; then
-  if ! pi install "$ROOT"; then
-    echo "[install] pi install failed; falling back to symlink"
+first_command() {
+  local cmd
+  for cmd in "$@"; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      printf '%s\n' "$cmd"
+      return 0
+    fi
+  done
+  return 1
+}
+
+PI_CLI="$(first_command senpi pi || true)"
+GROK_CLI="$(first_command grokomo grok || true)"
+
+echo "[install] senpi/pi-agent extension from $ROOT"
+if [ -n "$PI_CLI" ]; then
+  if ! "$PI_CLI" install "$ROOT"; then
+    echo "[install] $PI_CLI install failed; falling back to legacy pi symlink"
     mkdir -p "$HOME/.pi/agent/extensions/cliproxy"
     ln -sfn "$ROOT/index.ts" "$HOME/.pi/agent/extensions/cliproxy/index.ts"
   fi
 else
-  echo "[install] pi CLI not found; symlink extension only"
+  echo "[install] senpi/pi CLI not found; legacy pi symlink extension only"
   mkdir -p "$HOME/.pi/agent/extensions/cliproxy"
   ln -sfn "$ROOT/index.ts" "$HOME/.pi/agent/extensions/cliproxy/index.ts"
 fi
 
-echo "[install] grok plugin from $GROK_PLUGIN_SRC"
-if command -v grok >/dev/null 2>&1; then
-  if grok plugin list 2>/dev/null | grep -q 'cliproxy-api-provider'; then
-    grok plugin uninstall cliproxy-api-provider 2>/dev/null || true
+echo "[install] grokomo/GrokBuild plugin from $GROK_PLUGIN_SRC"
+if [ -n "$GROK_CLI" ]; then
+  if "$GROK_CLI" plugin list 2>/dev/null | grep -q 'cliproxy-api-provider'; then
+    "$GROK_CLI" plugin uninstall cliproxy-api-provider 2>/dev/null || true
   fi
   if [ -e "$HOME/.grok/plugins/cliproxy-api-provider" ] && [ ! -L "$HOME/.grok/plugins/cliproxy-api-provider" ]; then
     ts=$(date +%Y%m%d%H%M%S)
     mv "$HOME/.grok/plugins/cliproxy-api-provider" "$HOME/.grok/plugins/cliproxy-api-provider.bak-$ts"
     echo "[install] backed up existing unmanaged plugin -> cliproxy-api-provider.bak-$ts"
   fi
-  if ! grok plugin install "$GROK_PLUGIN_SRC" --trust; then
-    echo "[install] grok plugin install failed; symlink fallback"
+  if ! "$GROK_CLI" plugin install "$GROK_PLUGIN_SRC" --trust; then
+    echo "[install] $GROK_CLI plugin install failed; symlink fallback"
     mkdir -p "$HOME/.grok/plugins"
     ln -sfn "$GROK_PLUGIN_SRC" "$HOME/.grok/plugins/cliproxy-api-provider"
   fi
-  grok plugin enable cliproxy-api-provider 2>/dev/null || true
+  "$GROK_CLI" plugin enable cliproxy-api-provider 2>/dev/null || true
 else
-  echo "[install] grok CLI not found; symlink plugin only"
+  echo "[install] grokomo/grok CLI not found; symlink plugin only"
   mkdir -p "$HOME/.grok/plugins"
   ln -sfn "$GROK_PLUGIN_SRC" "$HOME/.grok/plugins/cliproxy-api-provider"
 fi
@@ -72,5 +86,5 @@ echo "[install] sync grok models from catalog"
 node "$GROK_PLUGIN_SRC/scripts/sync-models.mjs" --force
 
 echo "[install] done"
-echo "  pi:   pi --list-models grok-4.5"
-echo "  grok: open TUI and pick CLIProxy grok-4.5 (defaultModel=grok-4.5)"
+echo "  senpi/pi-agent: senpi --list-models grok-4.5 --provider cliproxy"
+echo "  grokomo/GrokBuild: open TUI and pick CLIProxy grok-4.5 (defaultModel=grok-4.5)"

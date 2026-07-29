@@ -57,17 +57,32 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.maxTokens).toBe(131_072);
 	});
 
-	test("kimi-k3 compat carries reasoningEffortMap low|high|max", () => {
+	test("kimi-k3 carries moonshot tool schema flavor and thinkingLevelMap", () => {
 		const model = toProviderModel(
 			{ id: "kimi-k3", owned_by: "moonshot" },
 			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
 		);
-		expect(model.compat.reasoningEffortMap).toEqual({ minimal: "low", low: "low", medium: "high", high: "high", xhigh: "max" });
+		expect(model.compat.toolSchemaFlavor).toBe("moonshot-mfjs");
+		expect(model.thinkingLevelMap).toEqual({
+			off: null,
+			minimal: null,
+			low: "low",
+			medium: "medium",
+			high: "high",
+			xhigh: "xhigh",
+			max: "max",
+		});
 	});
 
-	test("gpt-5.6-sol uses the 1.05M context window, not the 272K pricing threshold", () => {
+	test("gpt-5.5 uses the observed 272K CLIProxy effective context", () => {
+		const m = resolveModelMetadata("gpt-5.5");
+		expect(m.contextWindow).toBe(272_000);
+		expect(m.maxTokens).toBe(128_000);
+	});
+
+	test("gpt-5.6-sol uses the Codex subscription context limit", () => {
 		const m = resolveModelMetadata("gpt-5.6-sol");
-		expect(m.contextWindow).toBe(1_050_000);
+		expect(m.contextWindow).toBe(372_000);
 		expect(m.maxTokens).toBe(128_000);
 	});
 

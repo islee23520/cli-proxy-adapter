@@ -6,12 +6,12 @@
 Development for this line lives on this repo only.
 
 Bridge that exposes [CLIProxyAPIPlus](https://github.com/router-for-me/CLIProxyAPIPlus)
-models to **two agent hosts** from one repo:
+models to **two CLI-tool host families** from one repo:
 
 | Host | What you install | Artifact |
 |------|------------------|----------|
-| **pi agent** ([pi-coding-agent](https://github.com/badlogic/pi-mono)) | TypeScript extension | `index.ts` |
-| **Grok** (rust `grok` / pi-agent CLI) | Grok plugin | `plugins/grok/cliproxy-api-provider` |
+| **Senpi / pi-agent variants** ([pi-coding-agent](https://github.com/badlogic/pi-mono)) | TypeScript extension | `index.ts` |
+| **Grokomo / GrokBuild CLI variants** (rust `grok` plugin host) | Grok plugin | `plugins/grok/cliproxy-api-provider` |
 
 Log in once inside CLIProxyAPIPlus (Claude Code, Gemini CLI, OpenAI Codex,
 Copilot, Kiro, GLM, Kimi, …). Both hosts then consume those subscriptions
@@ -39,7 +39,7 @@ config for each host (see below).
 
 ---
 
-## Install for pi agent
+## Install for Senpi / pi-agent variants
 
 Registers a single provider name: **`cliproxy`**
 (`openai-completions` + `/v1`). Every discovered model appears under it
@@ -51,6 +51,9 @@ From this repo root:
 
 ```bash
 # preferred
+senpi install .
+
+# legacy pi-agent CLI
 pi install .
 
 # fallback if `pi install` is unavailable
@@ -69,7 +72,8 @@ pi -e ./index.ts
 First match wins:
 
 1. `CLIPROXY_URL` / `CLIPROXY_API_KEY`
-2. `~/.pi/agent/cliproxy.json`
+2. `~/.senpi/agent/cliproxy.json`
+3. `~/.pi/agent/cliproxy.json` for legacy pi-agent CLIs
 
 Env:
 
@@ -78,7 +82,7 @@ export CLIPROXY_URL=https://your-proxy.example.com
 export CLIPROXY_API_KEY=your-key   # optional if proxy has empty api-keys
 ```
 
-Or file (`~/.pi/agent/cliproxy.json`):
+Or file (`~/.senpi/agent/cliproxy.json`):
 
 ```json
 {
@@ -93,10 +97,10 @@ Missing API key is tolerated (placeholder is sent). If the proxy’s
 ### 3. Use it
 
 ```bash
-pi --list-models cliproxy
-pi --provider cliproxy --model kimi-k3
-pi --provider cliproxy --model grok-4.5
-pi --provider cliproxy --model glm-5.2
+senpi --list-models cliproxy
+senpi --provider cliproxy --model kimi-k3
+senpi --provider cliproxy --model grok-4.5
+senpi --provider cliproxy --model glm-5.2
 ```
 
 In a session: `Ctrl+P` / `/model`, then pick a `cliproxy/…` model.
@@ -117,7 +121,7 @@ fields (e.g. Kimi K3) still tokenize cleanly:
 
 ---
 
-## Install for Grok
+## Install for Grokomo / GrokBuild CLI variants
 
 Installs the **`cliproxy-api-provider`** plugin. It keeps
 `~/.grok/config.toml` `[model.*]` tables in sync with the catalog + live
@@ -129,6 +133,10 @@ Installs the **`cliproxy-api-provider`** plugin. It keeps
 From this repo root:
 
 ```bash
+grokomo plugin install ./plugins/grok/cliproxy-api-provider --trust
+grokomo plugin enable cliproxy-api-provider
+
+# generic rust GrokBuild host CLIs with the same plugin API also work
 grok plugin install ./plugins/grok/cliproxy-api-provider --trust
 grok plugin enable cliproxy-api-provider
 ```
@@ -220,6 +228,14 @@ You still must set **pi** `CLIPROXY_URL` / `~/.pi/agent/cliproxy.json` and
 - **Grok sync** — if the proxy is down, the hook skips and leaves config alone.
 - Auth headers are host/SDK-specific; pi does not invent a global Bearer for
   every backend.
+
+## Verifying all host CLIs
+
+`bun test` covers the extension logic. `bun run verify:hosts` additionally
+smoke-tests the real host CLIs on this machine — both families, original and
+fork: `senpi`/`pi` (pi-agent) and `grokomo`/`grok` (GrokBuild). Every CLI found
+on PATH is checked; missing CLIs are reported as SKIP, but a family with no CLI
+at all fails. `bun run check` runs both.
 
 ## Troubleshooting
 

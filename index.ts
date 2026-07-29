@@ -13,7 +13,8 @@
  * cliproxy-gemini are unregistered on refresh so old picker entries vanish.
  *
  * Config is read from env vars (CLIPROXY_URL, CLIPROXY_API_KEY) first, then
- * ~/.pi/agent/cliproxy.json ({ "baseUrl": "...", "apiKey": "..." }).
+ * ~/.senpi/agent/cliproxy.json, then legacy ~/.pi/agent/cliproxy.json
+ * ({ "baseUrl": "...", "apiKey": "..." }).
  *
  * A missing API key is tolerated — CLIProxyAPIPlus accepts unauthenticated
  * requests when its own `api-keys:` list is empty. A dummy placeholder key
@@ -58,10 +59,22 @@ interface ModelCompat {
 	supportsDeveloperRole: false;
 	supportsReasoningEffort: boolean;
 	maxTokensField: "max_tokens";
-	// Optional per-model map from pi effort levels to backend reasoning_effort.
-	// Used when a backend (e.g. Kimi K3: low|high|max) does not accept pi's full vocabulary.
-	reasoningEffortMap?: { minimal?: string; low?: string; medium?: string; high?: string; xhigh?: string };
+	// Moonshot/Kimi function parameters require a root object schema (and reject
+	// parent `type` beside combiners). Senpi only applies that normalizer when
+	// this flavor is set.
+	toolSchemaFlavor?: "moonshot-mfjs";
 }
+
+/** Senpi maps thinking levels through model.thinkingLevelMap, not compat. */
+type ThinkingLevelMap = {
+	off?: string | null;
+	minimal?: string | null;
+	low?: string | null;
+	medium?: string | null;
+	high?: string | null;
+	xhigh?: string | null;
+	max?: string | null;
+};
 
 /** Single provider: all CLIProxy models via openai-completions at /v1. */
 const PROVIDER = {
@@ -122,7 +135,11 @@ function loadConfig(): Config {
 	let fileKey: string | undefined;
 	let fileContextOverrides: Record<string, number> = {};
 	let fileMaxTokensOverrides: Record<string, number> = {};
-	const configPath = join(homedir(), ".pi", "agent", "cliproxy.json");
+	const home = process.env.HOME?.trim() || homedir();
+	const configPath = firstExistingPath([
+		join(home, ".senpi", "agent", "cliproxy.json"),
+		join(home, ".pi", "agent", "cliproxy.json"),
+	]);
 	if (existsSync(configPath)) {
 		try {
 			const parsed = JSON.parse(readFileSync(configPath, "utf-8")) as {
@@ -148,7 +165,7 @@ function loadConfig(): Config {
 	const rawBaseUrl = envUrl || fileBase;
 	if (!rawBaseUrl) {
 		throw new Error(
-			"[cliproxy] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.pi/agent/cliproxy.json",
+			"[cliproxy] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.senpi/agent/cliproxy.json (legacy: ~/.pi/agent/cliproxy.json)",
 		);
 	}
 	// Strip trailing slashes so we can safely append suffixes.
@@ -162,6 +179,10 @@ function loadConfig(): Config {
 	const maxTokensOverrides = { ...fileMaxTokensOverrides, ...parseOverrides(process.env.CLIPROXY_MAX_TOKENS_OVERRIDES) };
 
 	return { baseUrl, apiKey, contextOverrides, maxTokensOverrides };
+}
+
+function firstExistingPath(paths: readonly string[]): string {
+	return paths.find((p) => existsSync(p)) ?? paths[0];
 }
 
 function parseOverrides(raw: string | undefined): Record<string, number> {
@@ -204,6 +225,143 @@ async function fetchModels(cfg: Config): Promise<CLIProxyListModel[]> {
 
 interface ModelMetadata { reasoning: boolean; input: ("text" | "image")[]; contextWindow: number; maxTokens: number; }
 
+type ToolRequestPayload = {
+	tools?: Array<{
+		type?: unknown;
+		function?: {
+			parameters?: unknown;
+			[key: string]: unknown;
+		};
+		[key: string]: unknown;
+	}>;
+	[key: string]: unknown;
+};
+
+/** Model carried on `before_provider_request` by hosts that resolve it per request. */
+type RequestModel = { id: string; provider: string };
+
+/**
+ * Read the per-request model off the event. The pinned host typings predate this
+ * field, so it is read structurally instead of through the event type.
+ */
+export function requestModel(event: unknown): RequestModel | undefined {
+	if (!event || typeof event !== "object") return undefined;
+	const model = (event as { model?: unknown }).model;
+	if (!model || typeof model !== "object") return undefined;
+	const { id, provider } = model as { id?: unknown; provider?: unknown };
+	return typeof id === "string" && typeof provider === "string" ? { id, provider } : undefined;
+}
+
+export function normalizeToolParameterTypes(payload: unknown): unknown {
+	if (!payload || typeof payload !== "object") return payload;
+	const request = payload as ToolRequestPayload;
+	if (!Array.isArray(request.tools)) return payload;
+
+	let changed = false;
+	const tools = request.tools.map((tool) => {
+		if (tool?.type !== "function" || !tool.function || typeof tool.function !== "object") return tool;
+		const parameters = tool.function.parameters;
+		if (
+			parameters &&
+			typeof parameters === "object" &&
+			!Array.isArray(parameters) &&
+			(parameters as Record<string, unknown>).type === "object"
+		) return tool;
+
+		changed = true;
+		const objectParameters = parameters && typeof parameters === "object" && !Array.isArray(parameters)
+			? parameters as Record<string, unknown>
+			: { properties: {} };
+		return {
+			...tool,
+			function: {
+				...tool.function,
+				parameters: { ...objectParameters, type: "object" },
+			},
+		};
+	});
+
+	return changed ? { ...request, tools } : payload;
+}
+
+function mergeKimiUnionPropertySchemas(schemas: Record<string, unknown>[]): Record<string, unknown> {
+	if (schemas.length === 1) return schemas[0];
+	const serialized = schemas.map((schema) => JSON.stringify(schema));
+	if (serialized.every((schema) => schema === serialized[0])) return schemas[0];
+
+	const values = schemas.flatMap((schema) => {
+		if ("const" in schema) return [schema.const];
+		return Array.isArray(schema.enum) ? schema.enum : [];
+	});
+	if (values.length === schemas.length) {
+		const types = [...new Set(values.map((value) => typeof value))];
+		return { ...(types.length === 1 && types[0] !== "undefined" ? { type: types[0] } : {}), enum: [...new Set(values)] };
+	}
+
+	return { anyOf: schemas };
+}
+
+function flattenKimiRootObjectUnion(parameters: Record<string, unknown>): Record<string, unknown> | undefined {
+	const union = Array.isArray(parameters.anyOf) ? parameters.anyOf : Array.isArray(parameters.oneOf) ? parameters.oneOf : undefined;
+	if (!union?.length) return undefined;
+	const branches = union.filter(
+		(branch): branch is Record<string, unknown> =>
+			Boolean(branch) &&
+			typeof branch === "object" &&
+			!Array.isArray(branch) &&
+			(branch as Record<string, unknown>).type === "object",
+	);
+	if (branches.length !== union.length) return undefined;
+
+	const propertySchemas = new Map<string, Record<string, unknown>[]>();
+	for (const branch of branches) {
+		const properties = branch.properties;
+		if (!properties || typeof properties !== "object" || Array.isArray(properties)) continue;
+		for (const [name, schema] of Object.entries(properties)) {
+			if (!schema || typeof schema !== "object" || Array.isArray(schema)) continue;
+			const existing = propertySchemas.get(name) ?? [];
+			existing.push(schema as Record<string, unknown>);
+			propertySchemas.set(name, existing);
+		}
+	}
+
+	const requiredSets = branches.map((branch) => new Set(Array.isArray(branch.required) ? branch.required.filter((name): name is string => typeof name === "string") : []));
+	const required = [...requiredSets[0]].filter((name) => requiredSets.every((set) => set.has(name)));
+	const { anyOf: _anyOf, oneOf: _oneOf, type: _type, properties: _properties, required: _required, ...rest } = parameters;
+	return {
+		...rest,
+		type: "object",
+		properties: Object.fromEntries([...propertySchemas].map(([name, schemas]) => [name, mergeKimiUnionPropertySchemas(schemas)])),
+		...(required.length > 0 ? { required } : {}),
+	};
+}
+
+export function normalizeKimiToolParameterTypes(payload: unknown): unknown {
+	if (!payload || typeof payload !== "object") return payload;
+	const request = payload as ToolRequestPayload;
+	if (!Array.isArray(request.tools)) return payload;
+
+	let changed = false;
+	const tools = request.tools.map((tool) => {
+		if (tool?.type !== "function" || !tool.function || typeof tool.function !== "object") return tool;
+		const rawParameters = tool.function.parameters;
+		const parameters = rawParameters && typeof rawParameters === "object" && !Array.isArray(rawParameters)
+			? rawParameters as Record<string, unknown>
+			: {};
+		const flattened = flattenKimiRootObjectUnion(parameters);
+		const normalized = flattened ?? (parameters.type === "object" ? parameters : { ...parameters, type: "object" });
+		if (normalized === parameters) return tool;
+
+		changed = true;
+		return {
+			...tool,
+			function: { ...tool.function, parameters: normalized },
+		};
+	});
+
+	return changed ? { ...request, tools } : payload;
+}
+
 // ---------------------------------------------------------------------------
 // MODEL_METADATA policy
 // ---------------------------------------------------------------------------
@@ -215,15 +373,16 @@ interface ModelMetadata { reasoning: boolean; input: ("text" | "image")[]; conte
 //    (or `/cliproxy-models` from inside pi). Every id the proxy serves MUST
 //    have an explicit entry below.
 //
-// 2. contextWindow — from each model's OFFICIAL VENDOR DOCS. The proxy's
-//    `context_window` field in ~/.grok/config.toml is NOT authoritative — it is
-//    a hardcoded heuristic in the cliproxy-api-provider plugin's sync-models.mjs
-//    that applies a blanket 200k cap to Claude/Kimi/GLM (understating
-//    long-context models like claude-opus-4-6, kimi-k3, glm-5.2) and overstates
-//    grok-4.x. Always cite the vendor docs page in the commit message when
-//    changing a contextWindow. Sources used:
+// 2. contextWindow — from each model's OFFICIAL VENDOR DOCS, except subscription
+//    gateways whose official client catalog publishes a lower effective limit.
+//    GPT-5.6 via Codex OAuth is one such case: the direct API supports 1.05M,
+//    while the official Codex catalog and CLIProxy route advertise 372K. Use
+//    the route limit so Senpi compacts before the gateway rejects the request.
+//    Always cite the source page in the commit message when changing a window.
+//    Sources used:
 //      - Anthropic: https://platform.claude.com/docs/en/docs/about-claude/models/overview
 //      - Google:    https://ai.google.dev/gemini-api/docs/gemini-3
+//      - OpenAI:    https://developers.openai.com/api/docs/models/<model-id>.md
 //      - xAI:       https://docs.x.ai/developers/models/<model-id>
 //      - Kimi:      https://platform.kimi.ai/docs/models
 //      - Z.ai:      https://docs.z.ai/guides/llm/<model>.md
@@ -279,12 +438,12 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"grok-imagine-video-1.5-preview": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"codex-auto-review": { reasoning: true, input: ["text"], contextWindow: 272_000, maxTokens: 128_000 },
 	"gpt-5.3-codex-spark": { reasoning: true, input: ["text"], contextWindow: 128_000, maxTokens: 32_000 },
-	"gpt-5.4": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-5.4": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
 	"gpt-5.4-mini": { reasoning: true, input: ["text", "image"], contextWindow: 400_000, maxTokens: 128_000 },
-	"gpt-5.5": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
-	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
-	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
-	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-5.5": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
+	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 372_000, maxTokens: 128_000 },
+	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 372_000, maxTokens: 128_000 },
+	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 372_000, maxTokens: 128_000 },
 	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 131_072 },
 	"gpt-image-1.5": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"gpt-image-2": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
@@ -356,7 +515,8 @@ function inferLimits(id: string): { contextWindow: number; maxTokens: number } {
 	if (l.includes("glm-4.6") || l.includes("glm-4.7") || l.includes("glm-5")) return { contextWindow: 200_000, maxTokens: 131_072 };
 	if (l.includes("glm-4.5")) return { contextWindow: 131_072, maxTokens: 98_304 };
 	if (l.includes("glm")) return { contextWindow: 200_000, maxTokens: 131_072 };
-	if (l.includes("gpt-5.4") || l.includes("gpt-5.5") || l.includes("gpt-5.6")) return { contextWindow: 1_050_000, maxTokens: 128_000 };
+	if (l.includes("gpt-5.6")) return { contextWindow: 372_000, maxTokens: 128_000 };
+	if (l.includes("gpt-5.4") || l.includes("gpt-5.5")) return { contextWindow: 272_000, maxTokens: 128_000 };
 	if (l.includes("gpt-5")) return { contextWindow: 272_000, maxTokens: 128_000 };
 	if (l.includes("gpt-4.1")) return { contextWindow: 1_000_000, maxTokens: 32_768 };
 	if (l.includes("gpt-4o")) return { contextWindow: 128_000, maxTokens: 16_384 };
@@ -375,6 +535,7 @@ interface PiModelConfig {
 	contextWindow: number;
 	maxTokens: number;
 	compat: ModelCompat;
+	thinkingLevelMap?: ThinkingLevelMap;
 }
 
 /** Resolve metadata for a model id: MODEL_METADATA table first, infer* fallback. Exported for tests. */
@@ -394,15 +555,28 @@ export function toProviderModel(m: CLIProxyListModel, cfg: Config): PiModelConfi
 	const meta = resolveModelMetadata(m.id);
 	const contextWindow = cfg.contextOverrides[m.id] ?? meta.contextWindow;
 	const maxTokens = cfg.maxTokensOverrides[m.id] ?? meta.maxTokens;
-	// Kimi K3 accepts only reasoning_effort: low | high | max (default max).
-	// Map pi's effort vocabulary onto Kimi's so /effort xhigh -> max, etc.
-	let compat: ModelCompat = PROVIDER.compat;
-	if (m.id.toLowerCase() === "kimi-k3") {
-		compat = {
-			...PROVIDER.compat,
-			reasoningEffortMap: { minimal: "low", low: "low", medium: "high", high: "high", xhigh: "max" },
-		};
-	}
+	// Kimi K3 accepts reasoning_effort: low | high | max (and some gateways also
+	// allow medium/xhigh). Senpi only remaps via model.thinkingLevelMap; a bare
+	// `minimal` on the wire is rejected by CLIProxy with
+	// `level "minimal" not supported, valid levels: low, medium, high, xhigh, max`.
+	const isKimiK3 = m.id.toLowerCase() === "kimi-k3";
+	const compat: ModelCompat = isKimiK3
+		? {
+				...PROVIDER.compat,
+				toolSchemaFlavor: "moonshot-mfjs",
+			}
+		: PROVIDER.compat;
+	const thinkingLevelMap: ThinkingLevelMap | undefined = isKimiK3
+		? {
+				off: null,
+				minimal: null,
+				low: "low",
+				medium: "medium",
+				high: "high",
+				xhigh: "xhigh",
+				max: "max",
+			}
+		: undefined;
 	return {
 		id: m.id,
 		name: m.owned_by ? `${m.id} (${m.owned_by})` : m.id,
@@ -412,6 +586,7 @@ export function toProviderModel(m: CLIProxyListModel, cfg: Config): PiModelConfi
 		contextWindow,
 		maxTokens,
 		compat,
+		...(thinkingLevelMap ? { thinkingLevelMap } : {}),
 	};
 }
 
@@ -585,6 +760,19 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 
 	registerFamilies(pi, cfg, models);
 	registerCommands(pi, cfg);
+	pi.on("before_provider_request", (event, ctx) => {
+		// `event.model` is the effective request model after auth/base-url/upstream
+		// resolution; `ctx.model` is only the session model, so it is wrong for
+		// subagent, look-at and compaction requests. Fall back for older hosts
+		// that do not populate the event field.
+		const model = requestModel(event) ?? ctx.model;
+		if (model?.provider !== PROVIDER.providerName) return;
+		const modelId = model.id.toLowerCase();
+		if (modelId.startsWith("kimi-") || modelId.startsWith("moonshot-")) {
+			return normalizeKimiToolParameterTypes(event.payload);
+		}
+		if (modelId.startsWith("gpt-")) return normalizeToolParameterTypes(event.payload);
+	});
 
 	pi.on("session_start", async (_event, ctx) => {
 		if (!ctx.hasUI) return;

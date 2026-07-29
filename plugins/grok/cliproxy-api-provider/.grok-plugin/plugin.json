@@ -1,7 +1,7 @@
 {
   "name": "cliproxy-api-provider",
   "version": "0.2.0",
-  "description": "CLIProxy model mappings for Grok (rust) from shared model-catalog.json SSOT; companion to cli-proxy-adapter TS extension.",
+  "description": "CLIProxy model mappings for Grokomo/GrokBuild CLI variants from shared model-catalog.json SSOT; companion to the Senpi/pi-agent TS extension.",
   "author": {
     "name": "local"
   },

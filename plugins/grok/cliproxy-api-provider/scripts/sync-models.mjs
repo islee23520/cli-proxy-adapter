@@ -138,6 +138,18 @@ function loadCatalog(catalogPath) {
   }
 }
 
+/**
+ * Host context-window overrides. Use documented model capability unless the
+ * subscription gateway publishes or enforces a lower route limit. GPT-5.6's
+ * direct API supports 1.05M, but Codex OAuth and CLIProxy expose 372K.
+ */
+function effectiveContextWindowOverride(mid) {
+  if (mid.includes("gpt-5.6")) return 372000;
+  if (mid === "gpt-5.4-mini") return 400000;
+  if (mid.includes("gpt-5.4") || mid.includes("gpt-5.5")) return 272000;
+  return null;
+}
+
 /** Heuristic fallback only when catalog has no entry for this id. */
 function heuristicContextWindow(mid) {
   if (mid.startsWith("gpt-5.3-codex")) return 256000;
@@ -150,6 +162,9 @@ function heuristicContextWindow(mid) {
 }
 
 function contextWindow(mid, catalog) {
+  const effective = effectiveContextWindowOverride(mid);
+  if (effective) return { value: effective, source: "effective-cap" };
+
   const meta = catalog.byId.get(mid);
   if (meta && typeof meta.contextWindow === "number" && meta.contextWindow > 0) {
     return { value: meta.contextWindow, source: "catalog" };
@@ -176,10 +191,11 @@ function effortSupport(mid, catalog) {
 
   // Normalize provider-prefixed ids (e.g. z-ai/glm-5.2-ultrafast)
   const slug = mid.includes("/") ? mid.split("/").pop() : mid;
+  const catalogSlug = slug;
 
   // Catalog reasoning flag is advisory for "does the model do reasoning";
   // proxy acceptance still wins for edge cases (handled by hard excludes above).
-  const cat = catalog.byId.get(mid) || catalog.byId.get(slug);
+  const cat = catalog.byId.get(mid) || catalog.byId.get(catalogSlug);
   const catSaysNo = cat && cat.reasoning === false;
 
   // Vendor-docs effort vocabulary (model-catalog.json `reasoningEffort`) wins

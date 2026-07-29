@@ -1,11 +1,11 @@
-# Dual host: pi + Grok (rust agent)
+# Dual host: Senpi/pi-agent + Grokomo/GrokBuild
 
 This repo ships **one catalog SSOT** and **two runtimes**:
 
 | Surface | Artifact | Install |
 |---------|----------|---------|
-| **pi** (TS coding-agent) | `index.ts` extension | `pi install .` or `./scripts/install-all.sh` |
-| **Grok** (rust `grok` CLI / pi-agent) | `plugins/grok/cliproxy-api-provider` | `grok plugin install ./plugins/grok/cliproxy-api-provider` or `./scripts/install-all.sh` |
+| **Senpi / pi-agent variants** (TS coding-agent) | `index.ts` extension | `senpi install .` or `./scripts/install-all.sh` |
+| **Grokomo / GrokBuild CLI variants** (rust `grok` plugin host) | `plugins/grok/cliproxy-api-provider` | `grokomo plugin install ./plugins/grok/cliproxy-api-provider` or `./scripts/install-all.sh` |
 
 ## Shared SSOT
 
@@ -13,33 +13,37 @@ This repo ships **one catalog SSOT** and **two runtimes**:
   (also at `~/.grok/references/model-catalog.json` via symlink)
 - Live model **ids** always come from CLIProxy `/v1/models`
 
-## pi path
+## Senpi / pi-agent path
 
 Registers a single `cliproxy` provider (openai-completions + `/v1`) via `registerProvider`,
 using `MODEL_METADATA` mirrored from the catalog.
 
 ```bash
-pi install .
-pi --list-models grok-4.5
-pi --provider cliproxy --model grok-4.5
-pi --provider cliproxy --model glm-5.2
-pi --provider cliproxy --model kimi-k3
+senpi install .
+senpi --list-models grok-4.5 --provider cliproxy
+senpi --provider cliproxy --model grok-4.5
+senpi --provider cliproxy --model glm-5.2
+senpi --provider cliproxy --model kimi-k3
 ```
 
-## Grok path
+Legacy CLIs that still expose `pi install` are supported by the same `index.ts` extension.
+
+## Grokomo / GrokBuild path
 
 Plugin writes managed `[model.*]` tables into `~/.grok/config.toml` from the catalog
 so reasoning effort + context windows work when `[endpoints] models_base_url` points at CLIProxy.
 
 ```bash
-grok plugin install ./plugins/grok/cliproxy-api-provider
+grokomo plugin install ./plugins/grok/cliproxy-api-provider
 # ensure enabled in ~/.grok/config.user.toml:
 #   [plugins]
 #   enabled = ["lfg", "cliproxy-api-provider"]
 node ./plugins/grok/cliproxy-api-provider/scripts/sync-models.mjs --force
 ```
 
-Slash command inside Grok: `/cliproxy-sync`
+Generic `grok` CLIs that expose the same plugin commands are also supported.
+
+Slash command inside Grokomo/GrokBuild: `/cliproxy-sync`
 
 ## One-shot
 

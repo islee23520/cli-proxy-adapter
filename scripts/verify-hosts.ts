@@ -107,7 +107,7 @@ function cliList(envVar: string, fallback: readonly string[]): readonly string[]
 /** Model rows the extension must expose identically on every pi-family CLI. */
 const PI_MODEL_EXPECTATIONS = [
 	{ query: "gpt-5.5", needles: ["cliproxy", "gpt-5.5", "272K", "128K"], detail: "272K context / 128K output" },
-	{ query: "gpt-5.6-terra", needles: ["cliproxy", "gpt-5.6-terra", "372K"], detail: "372K effective Codex-route context" },
+	{ query: "gpt-5.6-terra", needles: ["cliproxy", "gpt-5.6-terra", "921K", "128K"], detail: "921K input context / 128K output" },
 	{ query: "grok-build", needles: ["cliproxy", "grok-build-0.1", "256K", "no"], detail: "256K context, reasoning disabled" },
 ] as const;
 
@@ -171,7 +171,7 @@ function verifyGrokComposition(): void {
 	try {
 		mkdirSync(smokeRoot, { recursive: true });
 		writeFileSync(userConfigPath, '[plugins]\nenabled = ["grokomo"]\n');
-		// This deliberately disagrees with the effective cap: the generated output must win at 372K.
+		// This deliberately disagrees with the effective cap: the generated output must win at 921K.
 		writeFileSync(catalogPath, JSON.stringify({ models: { "gpt-5.6-terra": { contextWindow: 1_050_000 } } }));
 		run(findOnPath("node") ?? process.execPath, [syncScript, "--force"], {
 			...process.env,
@@ -187,8 +187,8 @@ function verifyGrokComposition(): void {
 		const managedToml = readFileSync(managedTomlPath, "utf8");
 		const activeToml = readFileSync(configPath, "utf8");
 		for (const [label, toml] of [["managed TOML", managedToml], ["active GROK_CONFIG", activeToml]] as const) {
-			requireSectionValue(toml, 'model."gpt-5.6-terra"', "context_window", "372000");
-			record("PASS", `grok-family ${label}`, `${label} contains gpt-5.6-terra at 372K`);
+			requireSectionValue(toml, 'model."gpt-5.6-terra"', "context_window", "921000");
+			record("PASS", `grok-family ${label}`, `${label} contains gpt-5.6-terra at 921K`);
 		}
 		requireSectionValue(activeToml, "plugins", "enabled", '["grokomo", "cliproxy-api-provider"]');
 		if (requestedRoot) record("PASS", "grok-family smoke artifacts", smokeRoot);
@@ -221,7 +221,7 @@ const families: readonly Family[] = [
 		shared: {
 			name: "grok-family model sync",
 			run: verifyGrokComposition,
-			detail: "non-dry-run composition proves Terra at 372K in managed and active TOML",
+			detail: "non-dry-run composition proves Terra at 921K in managed and active TOML",
 		},
 	},
 ];

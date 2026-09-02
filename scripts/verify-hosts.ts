@@ -34,8 +34,19 @@ const syncScript = resolve(pluginPath, "scripts/sync-models.mjs");
 const results: Result[] = [];
 
 function run(command: string, args: readonly string[], env: NodeJS.ProcessEnv = process.env): string {
+	const executable = command.includes("/") ? command : findOnPath(command) ?? command;
+	const launcher = executable.endsWith(".js") ? findOnPath("node") ?? "node" : executable;
+	const launcherArgs = executable.endsWith(".js") ? [executable, ...args] : [...args];
 	try {
-		return execFileSync(command, [...args], {
+		if (command === "pi") {
+			return execFileSync("/bin/bash", ["-lc", 'out=$("$0" "$@" 2>&1); status=$?; printf "%s" "$out"; exit $status', executable, ...args], {
+				cwd: root,
+				env,
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "pipe"],
+			});
+		}
+		return execFileSync(launcher, launcherArgs, {
 			cwd: root,
 			env,
 			encoding: "utf8",
@@ -45,7 +56,7 @@ function run(command: string, args: readonly string[], env: NodeJS.ProcessEnv = 
 		const e = error as { stdout?: Buffer | string; stderr?: Buffer | string; status?: number };
 		const stdout = e.stdout ? String(e.stdout) : "";
 		const stderr = e.stderr ? String(e.stderr) : "";
-		throw new Error(`${command} ${args.join(" ")} failed with ${e.status ?? "unknown"}\n${stdout}${stderr}`);
+		throw new Error(`${launcher} ${launcherArgs.join(" ")} failed with ${e.status ?? "unknown"}\n${stdout}${stderr}`);
 	}
 }
 
@@ -112,9 +123,10 @@ const PI_MODEL_EXPECTATIONS = [
 ] as const;
 
 function verifyPiCli(cli: string): void {
+	const extensionArgs = cli === "pi" ? ["--no-extensions", "--extension", resolve(root, "index.ts")] : [];
 	for (const { query, needles, detail } of PI_MODEL_EXPECTATIONS) {
 		check(`${cli} ${query}`, () => {
-			const output = run(cli, ["--list-models", query, "--provider", "cliproxy", "--offline"]);
+			const output = run(cli, [...extensionArgs, "--list-models", query, "--provider", "cliproxy", "--offline"]);
 			for (const needle of needles) requireIncludes(output, needle, `${cli} ${query}`);
 			return `cliproxy model metadata loaded with ${detail}`;
 		});
@@ -141,6 +153,7 @@ function verifyGrokCli(cli: string): void {
 }
 
 function configuredBaseUrl(): string | undefined {
+	if (process.env.CLIPROXY_URL) return process.env.CLIPROXY_URL;
 	if (process.env.CLIPROXY_BASE_URL) return process.env.CLIPROXY_BASE_URL;
 	for (const homeDir of [".grok", ".grokomo"]) {
 		const configPath = join(homedir(), homeDir, "config.toml");
@@ -158,7 +171,7 @@ function configuredBaseUrl(): string | undefined {
  */
 function verifyGrokComposition(): void {
 	const baseUrl = configuredBaseUrl();
-	if (!baseUrl) throw new Error("grok composition smoke needs CLIPROXY_BASE_URL or ~/.grok/config.toml [endpoints].models_base_url");
+	if (!baseUrl) throw new Error("grok composition smoke needs CLIPROXY_URL/CLIPROXY_BASE_URL or an active Grok-family config [endpoints].models_base_url");
 	const requestedRoot = process.env.VERIFY_HOSTS_SMOKE_DIR;
 	const smokeRoot = requestedRoot || mkdtempSync(join(tmpdir(), "cliproxy-verify-hosts-"));
 	const ownsSmokeRoot = !requestedRoot;
@@ -242,7 +255,11 @@ for (const family of families) {
 	}
 
 	for (const cli of present) {
-		check(`${cli} version`, () => run(cli, ["--version"]).trim().split("\n")[0] ?? "unknown");
+		check(`${cli} version`, () => {
+			const executable = findOnPath(cli) ?? cli;
+			const version = run(cli, ["--version"]).trim().split("\n")[0] || "unknown";
+			return `${version} (${executable})`;
+		});
 		family.verifyCli(cli);
 	}
 

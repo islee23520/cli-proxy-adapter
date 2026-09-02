@@ -94,9 +94,9 @@ Optional overrides (first found wins):
 ```json
 {
   "baseUrl": "http://127.0.0.1:8317/v1",
-  "defaultModel": "grok-4.5",
+  "defaultModel": "grok-4.6",
   "webSearch": "grok-4.20-multi-agent-0309",
-  "defaultReasoningEffort": "high",
+  "defaultReasoningEffort": "xhigh",
   "envKey": "XAI_API_KEY",
   "catalogPath": "~/.agents/references/model-catalog.json",
   "managedTomlPath": "~/.agents/references/cliproxy-models.managed.toml",

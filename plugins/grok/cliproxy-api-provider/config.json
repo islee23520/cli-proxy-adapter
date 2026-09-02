@@ -1,7 +1,7 @@
 {
-  "defaultModel": "grok-4.5",
+  "defaultModel": "grok-4.6",
   "webSearch": "grok-4.20-multi-agent-0309",
-  "defaultReasoningEffort": "high",
+  "defaultReasoningEffort": "xhigh",
   "envKey": "XAI_API_KEY",
   "apiBackend": "chat_completions",
   "timeoutMs": 4000

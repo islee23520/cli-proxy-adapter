@@ -30,9 +30,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN_ROOT = process.env.GROK_PLUGIN_ROOT || path.resolve(__dirname, "..");
 const HOME = os.homedir();
+const GROK_HOME = resolveGrokHome();
 const PLUGIN_DATA =
   process.env.GROK_PLUGIN_DATA ||
-  path.join(HOME, ".grok", "plugin-data", "cliproxy-api-provider");
+  path.join(GROK_HOME, "plugin-data", "cliproxy-api-provider");
 
 const BEGIN = "# >>> CLIProxyAPIProvider managed begin";
 const END = "# >>> CLIProxyAPIProvider managed end";
@@ -40,22 +41,22 @@ const GENERATOR = "CLIProxyAPIProvider plugin — do not edit inside this block"
 
 // Canonical shared reference tree (also used by agents / other CLIs)
 const AGENTS_REFERENCES = path.join(HOME, ".agents", "references");
-const GROK_REFERENCES = path.join(HOME, ".grok", "references");
+const GROK_REFERENCES = path.join(GROK_HOME, "references");
 const DEFAULT_CATALOG = path.join(AGENTS_REFERENCES, "model-catalog.json");
 const DEFAULT_MANAGED_TOML = path.join(
   AGENTS_REFERENCES,
   "cliproxy-models.managed.toml",
 );
-const DEFAULT_USER_CONFIG = path.join(HOME, ".grok", "config.user.toml");
+const DEFAULT_USER_CONFIG = path.join(GROK_HOME, "config.user.toml");
 
 const DEFAULTS = {
   baseUrl: "",  // must come from config.json or CLIPROXY_BASE_URL
-  defaultModel: "grok-4.5",
+  defaultModel: "grok-4.6",
   webSearch: "grok-4.20-multi-agent-0309",
-  defaultReasoningEffort: "high",
+  defaultReasoningEffort: "xhigh",
   envKey: "XAI_API_KEY",
   apiBackend: "chat_completions",
-  configPath: path.join(HOME, ".grok", "config.toml"),
+  configPath: path.join(GROK_HOME, "config.toml"),
   userConfigPath: DEFAULT_USER_CONFIG,
   managedTomlPath: DEFAULT_MANAGED_TOML,
   catalogPath: DEFAULT_CATALOG,
@@ -63,6 +64,20 @@ const DEFAULTS = {
   cachePath: path.join(PLUGIN_DATA, "last-sync.json"),
   timeoutMs: 4000,
 };
+
+function resolveGrokHome() {
+  if (process.env.GROK_HOME) {
+    return process.env.GROK_HOME.replace(/^~(?=\/|$)/, HOME);
+  }
+  if (process.env.GROK_PLUGIN_DATA) {
+    return path.dirname(path.dirname(process.env.GROK_PLUGIN_DATA));
+  }
+  for (const marker of [`${path.sep}installed-plugins${path.sep}`, `${path.sep}plugins${path.sep}`]) {
+    const index = PLUGIN_ROOT.indexOf(marker);
+    if (index >= 0) return PLUGIN_ROOT.slice(0, index);
+  }
+  return path.join(HOME, ".grok");
+}
 
 function parseArgs(argv) {
   const flags = new Set();
@@ -86,6 +101,11 @@ function expandHome(p) {
   if (!p) return p;
   if (p.startsWith("~/")) return path.join(HOME, p.slice(2));
   return p;
+}
+
+function normalizeBaseUrl(value) {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
 }
 
 function loadPluginConfig() {
@@ -172,7 +192,8 @@ function contextWindow(mid, catalog) {
   const effective = effectiveContextWindowOverride(mid);
   if (effective) return { value: effective, source: "effective-cap" };
 
-  const meta = catalog.byId.get(mid);
+  const catalogMid = gptFastTierBaseId(mid) || mid;
+  const meta = catalog.byId.get(catalogMid);
   if (meta && typeof meta.contextWindow === "number" && meta.contextWindow > 0) {
     return { value: meta.contextWindow, source: "catalog" };
   }
@@ -198,7 +219,7 @@ function effortSupport(mid, catalog) {
 
   // Normalize provider-prefixed ids (e.g. z-ai/glm-5.2-ultrafast)
   const slug = mid.includes("/") ? mid.split("/").pop() : mid;
-  const catalogSlug = slug;
+  const catalogSlug = gptFastTierBaseId(slug) || slug;
 
   // Catalog reasoning flag is advisory for "does the model do reasoning";
   // proxy acceptance still wins for edge cases (handled by hard excludes above).
@@ -247,13 +268,13 @@ function effortSupport(mid, catalog) {
   if (slug === "kimi-k3") {
     def = "max";
   } else if (
-    slug === "grok-4.5" ||
-    slug === "grok-4.3" ||
+    slug === "grok-4.6" ||
     slug === "grok-4.20-0309-reasoning" ||
-    slug === "grok-4.20-multi-agent-0309" ||
-    isKimi ||
-    isThinking
+    slug === "grok-4.20-multi-agent-0309"
   ) {
+    def = "xhigh";
+  } else if (isKimi || isThinking) {
+    // Kimi effort vocab is low|high|max (no xhigh). Thinking models stay high.
     def = "high";
   }
   const efforts = isKimi
@@ -455,10 +476,11 @@ function stripProviderOwnedSections(text) {
 
 function ensurePluginsEnabled(text, pluginName) {
   if (!/\[plugins\]/.test(text)) {
+    const section = `[plugins]\nenabled = ["lfg", "${pluginName}"]\n`;
+    if (!/\[cli\]/.test(text)) return `${text.trimEnd()}${text.trim() ? "\n\n" : ""}${section}`;
     return text.replace(
       /(\[cli\][\s\S]*?(?=\n\[|\n*$))/,
-      (block) =>
-        `${block.trimEnd()}\n\n[plugins]\nenabled = ["lfg", "${pluginName}"]\n`,
+      (block) => `${block.trimEnd()}\n\n${section}`,
     );
   }
 
@@ -599,12 +621,13 @@ async function main() {
   const configuredBaseUrl = existing.match(
     /^models_base_url\s*=\s*["']([^"']+)["']/m,
   )?.[1];
-  const baseUrl = process.env.CLIPROXY_BASE_URL || cfg.baseUrl || configuredBaseUrl;
-  if (!baseUrl) {
+  const configuredUrl = process.env.CLIPROXY_BASE_URL || process.env.CLIPROXY_URL || cfg.baseUrl || configuredBaseUrl;
+  if (!configuredUrl) {
     throw new Error(
-      `baseUrl not set. Set CLIPROXY_BASE_URL, plugin config baseUrl, or [endpoints].models_base_url in ${configPath}.`,
+      `baseUrl not set. Set CLIPROXY_URL/CLIPROXY_BASE_URL, plugin config baseUrl, or [endpoints].models_base_url in ${configPath}.`,
     );
   }
+  const baseUrl = normalizeBaseUrl(configuredUrl);
   const userConfigPath = expandHome(
     process.env.GROK_USER_CONFIG || cfg.userConfigPath || DEFAULT_USER_CONFIG,
   );
@@ -650,9 +673,9 @@ async function main() {
     baseUrl,
     envKey,
     apiBackend: cfg.apiBackend || "chat_completions",
-    defaultModel: cfg.defaultModel || "grok-4.5",
+    defaultModel: cfg.defaultModel || "grok-4.6",
     webSearch: cfg.webSearch || "grok-4.20-multi-agent-0309",
-    defaultReasoningEffort: cfg.defaultReasoningEffort || "high",
+    defaultReasoningEffort: cfg.defaultReasoningEffort || "xhigh",
     ids,
     catalog,
   });

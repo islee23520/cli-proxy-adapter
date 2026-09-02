@@ -80,7 +80,7 @@ type ThinkingLevelMap = {
 const PROVIDER = {
 	providerName: "cliproxy",
 	api: "openai-completions" as const,
-	baseSuffix: "/v1",
+	baseSuffix: "/v1" as const,
 	compat: {
 		supportsStore: false,
 		supportsDeveloperRole: false,
@@ -429,6 +429,7 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"grok-4.20-multi-agent-0309": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 1_000_000 },
 	"grok-4.3": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 1_000_000 },
 	"grok-4.5": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 500_000 },
+	"grok-4.6": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 500_000 },
 	"grok-build-0.1": { reasoning: false, input: ["text", "image"], contextWindow: 256_000, maxTokens: 256_000 },
 	"grok-composer-2.5-fast": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"grok-imagine-image": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
@@ -507,7 +508,7 @@ function inferLimits(id: string): { contextWindow: number; maxTokens: number } {
 	if (l.includes("gemini-2.5") || l.includes("gemini-3")) return { contextWindow: 1_048_576, maxTokens: 65_536 };
 	if (l.includes("gemini")) return { contextWindow: 1_048_576, maxTokens: 8_192 };
 	if (l.includes("grok-4.20") || l.includes("grok-4.3")) return { contextWindow: 1_000_000, maxTokens: 1_000_000 };
-	if (l.includes("grok-4.5")) return { contextWindow: 500_000, maxTokens: 500_000 };
+	if (l.includes("grok-4.5") || l.includes("grok-4.6")) return { contextWindow: 500_000, maxTokens: 500_000 };
 	if (l.includes("grok-build")) return { contextWindow: 256_000, maxTokens: 256_000 };
 	if (l.includes("grok")) return { contextWindow: 131_072, maxTokens: 8_192 };
 	if (l.includes("glm-5.2")) return { contextWindow: 1_000_000, maxTokens: 128_000 };
@@ -537,10 +538,17 @@ interface PiModelConfig {
 	thinkingLevelMap?: ThinkingLevelMap;
 }
 
+function gptFastTierBaseId(id: string): string | undefined {
+	const normalized = id.toLowerCase();
+	return normalized.startsWith("gpt-") && normalized.endsWith("-fast") ? id.slice(0, -"-fast".length) : undefined;
+}
+
 /** Resolve metadata for a model id: MODEL_METADATA table first, infer* fallback. Exported for tests. */
 export function resolveModelMetadata(id: string): ModelMetadata {
 	const hit = MODEL_METADATA[id];
 	if (hit) return hit;
+	const fastTierBaseId = gptFastTierBaseId(id);
+	if (fastTierBaseId) return resolveModelMetadata(fastTierBaseId);
 	const limits = inferLimits(id);
 	return {
 		reasoning: inferReasoning(id),
@@ -550,14 +558,66 @@ export function resolveModelMetadata(id: string): ModelMetadata {
 	};
 }
 
+/**
+ * Senpi/pi send session thinking via model.thinkingLevelMap → reasoning_effort.
+ * Without a map, `max`/`xhigh` are treated as unsupported for most models, so a
+ * settings default of `max` silently clamps down (e.g. to `high` on Grok).
+ *
+ * Vendor vocabularies:
+ * - Kimi K3: low | high | max (no medium/xhigh)
+ * - Grok 4.6 / 4.20 reasoning: low | medium | high | xhigh (no max; map max→xhigh)
+ * - Grok 4.5 reasoning: low | medium | high (xhigh is 4.6+; map xhigh/max→high)
+ */
+export function thinkingLevelMapFor(id: string): ThinkingLevelMap | undefined {
+	const slug = id.toLowerCase().includes("/") ? id.toLowerCase().split("/").pop()! : id.toLowerCase();
+	if (slug === "kimi-k3") {
+		return {
+			off: null,
+			minimal: null,
+			low: "low",
+			medium: null,
+			high: "high",
+			xhigh: null,
+			max: "max",
+		};
+	}
+	if (
+		slug === "grok-4.6" ||
+		slug === "grok-4.20-0309-reasoning" ||
+		slug === "grok-4.20-multi-agent-0309"
+	) {
+		return {
+			off: null,
+			minimal: "low",
+			low: "low",
+			medium: "medium",
+			high: "high",
+			xhigh: "xhigh",
+			max: "xhigh",
+		};
+	}
+	if (slug === "grok-4.5") {
+		return {
+			off: null,
+			minimal: "low",
+			low: "low",
+			medium: "medium",
+			high: "high",
+			xhigh: "high",
+			max: "high",
+		};
+	}
+	return undefined;
+}
+
 export function toProviderModel(m: CLIProxyListModel, cfg: Config): PiModelConfig {
 	const meta = resolveModelMetadata(m.id);
-	const contextWindow = cfg.contextOverrides[m.id] ?? meta.contextWindow;
-	const maxTokens = cfg.maxTokensOverrides[m.id] ?? meta.maxTokens;
-	// Kimi K3 accepts reasoning_effort: low | high | max (and some gateways also
-	// allow medium/xhigh). Senpi only remaps via model.thinkingLevelMap; a bare
-	// `minimal` on the wire is rejected by CLIProxy with
-	// `level "minimal" not supported, valid levels: low, medium, high, xhigh, max`.
+	const fastTierBaseId = gptFastTierBaseId(m.id);
+	const contextWindow = cfg.contextOverrides[m.id] ?? (fastTierBaseId ? cfg.contextOverrides[fastTierBaseId] : undefined) ?? meta.contextWindow;
+	const maxTokens = cfg.maxTokensOverrides[m.id] ?? (fastTierBaseId ? cfg.maxTokensOverrides[fastTierBaseId] : undefined) ?? meta.maxTokens;
+	// Kimi K3 needs moonshot tool-schema flavor + a correct thinkingLevelMap so
+	// Senpi's defaultThinkingLevel `max` lands as reasoning_effort=max (not a
+	// rejected medium/xhigh).
 	const isKimiK3 = m.id.toLowerCase() === "kimi-k3";
 	const compat: ModelCompat = isKimiK3
 		? {
@@ -565,17 +625,7 @@ export function toProviderModel(m: CLIProxyListModel, cfg: Config): PiModelConfi
 				toolSchemaFlavor: "moonshot-mfjs",
 			}
 		: PROVIDER.compat;
-	const thinkingLevelMap: ThinkingLevelMap | undefined = isKimiK3
-		? {
-				off: null,
-				minimal: null,
-				low: "low",
-				medium: "medium",
-				high: "high",
-				xhigh: "xhigh",
-				max: "max",
-			}
-		: undefined;
+	const thinkingLevelMap = thinkingLevelMapFor(m.id);
 	return {
 		id: m.id,
 		name: m.owned_by ? `${m.id} (${m.owned_by})` : m.id,
@@ -600,8 +650,11 @@ function fallbackModels(): CLIProxyListModel[] {
 		{ id: "gemini-2.5-pro", owned_by: "google" },
 		{ id: "gemini-2.5-flash", owned_by: "google" },
 		{ id: "gpt-5-codex", owned_by: "openai" },
+		{ id: "gpt-5.6-sol", owned_by: "openai" },
+		{ id: "gpt-5.6-sol-fast", owned_by: "openai" },
 		{ id: "gpt-4o", owned_by: "openai" },
 		{ id: "gpt-4o-mini", owned_by: "openai" },
+		{ id: "grok-4.6", owned_by: "xai" },
 		{ id: "grok-4.5", owned_by: "xai" },
 		{ id: "grok-4.3", owned_by: "xai" },
 		{ id: "glm-5.2", owned_by: "zai" },

@@ -131,6 +131,8 @@ describe("planRegistration (single cliproxy provider)", () => {
 
 			expect(warnSpy).not.toHaveBeenCalled();
 			expect(registerProvider).toHaveBeenCalledTimes(1);
+			const registration = registerProvider.mock.calls[0]?.[1];
+			expect(registration?.models.map((model: { id: string }) => model.id)).toContain("gpt-5.6-sol-fast");
 			expect(on).toHaveBeenCalledWith("session_start", expect.any(Function));
 		} finally {
 			fetchSpy.mockRestore();

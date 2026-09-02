@@ -10,6 +10,14 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.maxTokens).toBe(500_000);
 	});
 
+	test("grok-4.6 matches xAI docs: reasoning, image, 500k", () => {
+		const m = resolveModelMetadata("grok-4.6");
+		expect(m.reasoning).toBe(true);
+		expect(m.input).toEqual(["text", "image"]);
+		expect(m.contextWindow).toBe(500_000);
+		expect(m.maxTokens).toBe(500_000);
+	});
+
 	test("unknown id falls back to infer* without throwing", () => {
 		const m = resolveModelMetadata("totally-unknown-model-xyz");
 		expect(m.contextWindow).toBeGreaterThan(0);
@@ -57,20 +65,55 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.maxTokens).toBe(131_072);
 	});
 
-	test("kimi-k3 carries moonshot tool schema flavor and thinkingLevelMap", () => {
+	test("kimi-k3 carries moonshot tool schema flavor and max-effort thinkingLevelMap", () => {
 		const model = toProviderModel(
 			{ id: "kimi-k3", owned_by: "moonshot" },
 			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
 		);
 		expect(model.compat.toolSchemaFlavor).toBe("moonshot-mfjs");
+		// Vendor vocab is low|high|max only — medium/xhigh must stay unsupported.
 		expect(model.thinkingLevelMap).toEqual({
 			off: null,
 			minimal: null,
 			low: "low",
+			medium: null,
+			high: "high",
+			xhigh: null,
+			max: "max",
+		});
+	});
+
+	test("grok-4.5 maps session max/xhigh thinking to wire high", () => {
+		const model = toProviderModel(
+			{ id: "grok-4.5", owned_by: "xai" },
+			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
+		);
+		// xhigh is grok-4.6+; grok-4.5 treats xhigh as high.
+		expect(model.thinkingLevelMap).toEqual({
+			off: null,
+			minimal: "low",
+			low: "low",
+			medium: "medium",
+			high: "high",
+			xhigh: "high",
+			max: "high",
+		});
+	});
+
+	test("grok-4.6 maps session max thinking to wire xhigh", () => {
+		const model = toProviderModel(
+			{ id: "grok-4.6", owned_by: "xai" },
+			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
+		);
+		// Grok 4.6 has no `max` effort; Senpi defaultThinkingLevel=max must become xhigh.
+		expect(model.thinkingLevelMap).toEqual({
+			off: null,
+			minimal: "low",
+			low: "low",
 			medium: "medium",
 			high: "high",
 			xhigh: "xhigh",
-			max: "max",
+			max: "xhigh",
 		});
 	});
 
@@ -84,6 +127,23 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		const m = resolveModelMetadata("gpt-5.6-sol");
 		expect(m.contextWindow).toBe(921_000);
 		expect(m.maxTokens).toBe(128_000);
+	});
+
+	test("gpt fast ids inherit their live base-model metadata and overrides", () => {
+		const metadata = resolveModelMetadata("gpt-5.4-mini-fast");
+		expect(metadata.contextWindow).toBe(400_000);
+		expect(metadata.input).toEqual(["text", "image"]);
+		const model = toProviderModel(
+			{ id: "gpt-5.6-sol-fast", owned_by: "openai" },
+			{
+				baseUrl: "http://x",
+				apiKey: "k",
+				contextOverrides: { "gpt-5.6-sol": 360_000 },
+				maxTokensOverrides: { "gpt-5.6-sol": 120_000 },
+			},
+		);
+		expect(model.contextWindow).toBe(360_000);
+		expect(model.maxTokens).toBe(120_000);
 	});
 
 });

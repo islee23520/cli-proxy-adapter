@@ -20,8 +20,8 @@ using `MODEL_METADATA` mirrored from the catalog.
 
 ```bash
 senpi install .
-senpi --list-models grok-4.5 --provider cliproxy
-senpi --provider cliproxy --model grok-4.5
+senpi --list-models grok-4.6 --provider cliproxy
+senpi --provider cliproxy --model grok-4.6
 senpi --provider cliproxy --model glm-5.2
 senpi --provider cliproxy --model kimi-k3
 ```

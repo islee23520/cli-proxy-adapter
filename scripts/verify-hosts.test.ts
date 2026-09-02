@@ -119,3 +119,28 @@ test("verify-hosts skips absent original CLIs on a fork-only machine without fai
 	expect(output).toContain("SKIP grok");
 	expect(output).not.toContain("FAIL");
 });
+
+test("sync-models uses GROK_HOME and the shared CLIPROXY_URL", async () => {
+	const sandbox = await mkdtemp(join(tmpdir(), "cliproxy-sync-home-"));
+	sandboxes.push(sandbox);
+	const grokHome = join(sandbox, ".grokomo");
+	const baseUrl = await startModelFixture();
+	const proxyRoot = baseUrl.replace(/\/v1$/, "");
+
+	execFileSync(process.execPath, ["plugins/grok/cliproxy-api-provider/scripts/sync-models.mjs", "--force"], {
+		cwd: join(import.meta.dir, ".."),
+		encoding: "utf8",
+		env: {
+			...process.env,
+			HOME: sandbox,
+			GROK_HOME: grokHome,
+			CLIPROXY_URL: proxyRoot,
+			CLIPROXY_BASE_URL: "",
+		},
+	});
+
+	const config = await readFile(join(grokHome, "config.toml"), "utf8");
+	expect(section(config, "endpoints")).toContain(`models_base_url = "${baseUrl}"`);
+	expect(section(config, "plugins")).toContain('"cliproxy-api-provider"');
+	expect(section(config, 'model."gpt-5.4-mini"')).toContain("context_window = 400000");
+});

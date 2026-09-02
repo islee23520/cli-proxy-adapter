@@ -43,7 +43,7 @@ config for each host (see below).
 
 Registers a single provider name: **`cliproxy`**
 (`openai-completions` + `/v1`). Every discovered model appears under it
-(e.g. `cliproxy/kimi-k3`, `cliproxy/grok-4.5`).
+(e.g. `cliproxy/kimi-k3`, `cliproxy/grok-4.6`).
 
 ### 1. Install the extension
 
@@ -99,7 +99,7 @@ Missing API key is tolerated (placeholder is sent). If the proxy’s
 ```bash
 senpi --list-models cliproxy
 senpi --provider cliproxy --model kimi-k3
-senpi --provider cliproxy --model grok-4.5
+senpi --provider cliproxy --model grok-4.6
 senpi --provider cliproxy --model glm-5.2
 ```
 
@@ -175,9 +175,9 @@ plugin’s `config.json`):
 ```json
 {
   "baseUrl": "https://your-proxy.example.com/v1",
-  "defaultModel": "grok-4.5",
+  "defaultModel": "grok-4.6",
   "webSearch": "grok-4.20-multi-agent-0309",
-  "defaultReasoningEffort": "high",
+  "defaultReasoningEffort": "xhigh",
   "envKey": "XAI_API_KEY"
 }
 ```
@@ -191,7 +191,7 @@ node ./plugins/grok/cliproxy-api-provider/scripts/sync-models.mjs --force
 After install, SessionStart also runs the sync. In a Grok session:
 `/cliproxy-sync`.
 
-Then open Grok and pick a CLIProxy model (default pin: `grok-4.5`).
+Then open Grok and pick a CLIProxy model (default pin: `grok-4.6`).
 
 Deeper layout / catalog editing: [PLUGINS.md](./PLUGINS.md) and
 [plugins/grok/cliproxy-api-provider/README.md](./plugins/grok/cliproxy-api-provider/README.md).
@@ -257,8 +257,9 @@ node ~/.grok/plugins/cliproxy-api-provider/scripts/sync-models.mjs --force
 ```
 
 **`baseUrl not set` (Grok sync)** — set `CLIPROXY_BASE_URL`, plugin
-`config.json` `baseUrl`, or `[endpoints].models_base_url` in
-`~/.grok/config.toml`.
+`config.json` `baseUrl`, or `[endpoints].models_base_url` in the active
+`$GROK_HOME/config.toml`. `CLIPROXY_URL` is the shared preferred setting for
+both host families; `CLIPROXY_BASE_URL` remains a Grok-only compatibility alias.
 
 ## License
 

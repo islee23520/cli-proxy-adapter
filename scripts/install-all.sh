@@ -6,85 +6,67 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GROK_PLUGIN_SRC="$ROOT/plugins/grok/cliproxy-api-provider"
 
-first_command() {
-  local cmd
-  for cmd in "$@"; do
-    if command -v "$cmd" >/dev/null 2>&1; then
-      printf '%s\n' "$cmd"
-      return 0
-    fi
-  done
-  return 1
-}
-
-PI_CLI="$(first_command senpi pi || true)"
-GROK_CLI="$(first_command grokomo grok || true)"
-
 echo "[install] senpi/pi-agent extension from $ROOT"
-if [ -n "$PI_CLI" ]; then
-  if ! "$PI_CLI" install "$ROOT"; then
-    echo "[install] $PI_CLI install failed; falling back to legacy pi symlink"
-    mkdir -p "$HOME/.pi/agent/extensions/cliproxy"
-    ln -sfn "$ROOT/index.ts" "$HOME/.pi/agent/extensions/cliproxy/index.ts"
+PI_FOUND=false
+for PI_CLI in senpi pi; do
+  if ! command -v "$PI_CLI" >/dev/null 2>&1; then
+    continue
   fi
-else
-  echo "[install] senpi/pi CLI not found; legacy pi symlink extension only"
-  mkdir -p "$HOME/.pi/agent/extensions/cliproxy"
-  ln -sfn "$ROOT/index.ts" "$HOME/.pi/agent/extensions/cliproxy/index.ts"
+  PI_FOUND=true
+  if ! "$PI_CLI" install "$ROOT"; then
+    if [ "$PI_CLI" = "senpi" ]; then
+      PI_HOME="$HOME/.senpi"
+    else
+      PI_HOME="$HOME/.pi"
+    fi
+    echo "[install] $PI_CLI install failed; falling back to $PI_HOME symlink"
+    mkdir -p "$PI_HOME/agent/extensions/cliproxy"
+    ln -sfn "$ROOT/index.ts" "$PI_HOME/agent/extensions/cliproxy/index.ts"
+  fi
+done
+if [ "$PI_FOUND" = false ]; then
+  echo "[install] senpi/pi CLI not found; writing both extension fallbacks"
+  for PI_HOME in "$HOME/.senpi" "$HOME/.pi"; do
+    mkdir -p "$PI_HOME/agent/extensions/cliproxy"
+    ln -sfn "$ROOT/index.ts" "$PI_HOME/agent/extensions/cliproxy/index.ts"
+  done
 fi
 
 echo "[install] grokomo/GrokBuild plugin from $GROK_PLUGIN_SRC"
-if [ -n "$GROK_CLI" ]; then
-  if "$GROK_CLI" plugin list 2>/dev/null | grep -q 'cliproxy-api-provider'; then
-    "$GROK_CLI" plugin uninstall cliproxy-api-provider 2>/dev/null || true
+GROK_FOUND=false
+for HOST_SPEC in "grokomo:$HOME/.grokomo" "grok:$HOME/.grok"; do
+  GROK_CLI="${HOST_SPEC%%:*}"
+  HOST_HOME="${HOST_SPEC#*:}"
+  if ! command -v "$GROK_CLI" >/dev/null 2>&1; then
+    continue
   fi
-  if [ -e "$HOME/.grok/plugins/cliproxy-api-provider" ] && [ ! -L "$HOME/.grok/plugins/cliproxy-api-provider" ]; then
+  GROK_FOUND=true
+  if GROK_HOME="$HOST_HOME" "$GROK_CLI" plugin list 2>/dev/null | grep -q 'cliproxy-api-provider'; then
+    GROK_HOME="$HOST_HOME" "$GROK_CLI" plugin uninstall cliproxy-api-provider 2>/dev/null || true
+  fi
+  if [ -e "$HOST_HOME/plugins/cliproxy-api-provider" ] && [ ! -L "$HOST_HOME/plugins/cliproxy-api-provider" ]; then
     ts=$(date +%Y%m%d%H%M%S)
-    mv "$HOME/.grok/plugins/cliproxy-api-provider" "$HOME/.grok/plugins/cliproxy-api-provider.bak-$ts"
-    echo "[install] backed up existing unmanaged plugin -> cliproxy-api-provider.bak-$ts"
+    mv "$HOST_HOME/plugins/cliproxy-api-provider" "$HOST_HOME/plugins/cliproxy-api-provider.bak-$ts"
+    echo "[install] backed up existing unmanaged $GROK_CLI plugin -> cliproxy-api-provider.bak-$ts"
   fi
-  if ! "$GROK_CLI" plugin install "$GROK_PLUGIN_SRC" --trust; then
+  if ! GROK_HOME="$HOST_HOME" "$GROK_CLI" plugin install "$GROK_PLUGIN_SRC" --trust; then
     echo "[install] $GROK_CLI plugin install failed; symlink fallback"
-    mkdir -p "$HOME/.grok/plugins"
-    ln -sfn "$GROK_PLUGIN_SRC" "$HOME/.grok/plugins/cliproxy-api-provider"
+    mkdir -p "$HOST_HOME/plugins"
+    ln -sfn "$GROK_PLUGIN_SRC" "$HOST_HOME/plugins/cliproxy-api-provider"
   fi
-  "$GROK_CLI" plugin enable cliproxy-api-provider 2>/dev/null || true
-else
-  echo "[install] grokomo/grok CLI not found; symlink plugin only"
-  mkdir -p "$HOME/.grok/plugins"
-  ln -sfn "$GROK_PLUGIN_SRC" "$HOME/.grok/plugins/cliproxy-api-provider"
+  GROK_HOME="$HOST_HOME" "$GROK_CLI" plugin enable cliproxy-api-provider 2>/dev/null || true
+  echo "[install] sync $GROK_CLI models from catalog"
+  GROK_HOME="$HOST_HOME" node "$GROK_PLUGIN_SRC/scripts/sync-models.mjs" --force
+done
+if [ "$GROK_FOUND" = false ]; then
+  echo "[install] grokomo/grok CLI not found; writing both plugin fallbacks"
+  for HOST_HOME in "$HOME/.grokomo" "$HOME/.grok"; do
+    mkdir -p "$HOST_HOME/plugins"
+    ln -sfn "$GROK_PLUGIN_SRC" "$HOST_HOME/plugins/cliproxy-api-provider"
+    GROK_HOME="$HOST_HOME" node "$GROK_PLUGIN_SRC/scripts/sync-models.mjs" --force
+  done
 fi
-
-USER_CFG="$HOME/.grok/config.user.toml"
-if [ -f "$USER_CFG" ] && ! grep -q 'cliproxy-api-provider' "$USER_CFG"; then
-  echo "[install] adding cliproxy-api-provider to [plugins].enabled"
-  python3 - <<'PY'
-from pathlib import Path
-import re
-p = Path.home()/".grok/config.user.toml"
-t = p.read_text()
-if "cliproxy-api-provider" in t:
-    raise SystemExit
-m = re.search(r'(\[plugins\][\s\S]*?enabled\s*=\s*\[)([^\]]*)(\])', t)
-if not m:
-    raise SystemExit('no enabled list')
-body = m.group(2)
-if body.strip():
-    if "\n" in body:
-        insert = body.rstrip() + '\n    "cliproxy-api-provider",\n'
-    else:
-        insert = body.rstrip().rstrip(',') + ', "cliproxy-api-provider"'
-else:
-    insert = '\n    "cliproxy-api-provider",\n'
-t = t[:m.start()] + m.group(1) + insert + m.group(3) + t[m.end():]
-p.write_text(t)
-print('updated config.user.toml')
-PY
-fi
-
-echo "[install] sync grok models from catalog"
-node "$GROK_PLUGIN_SRC/scripts/sync-models.mjs" --force
 
 echo "[install] done"
-echo "  senpi/pi-agent: senpi --list-models grok-4.5 --provider cliproxy"
-echo "  grokomo/GrokBuild: open TUI and pick CLIProxy grok-4.5 (defaultModel=grok-4.5)"
+echo "  senpi/pi-agent: senpi --list-models grok-4.6 --provider cliproxy"
+echo "  grokomo/GrokBuild: open TUI and pick CLIProxy grok-4.6 (defaultModel=grok-4.6)"

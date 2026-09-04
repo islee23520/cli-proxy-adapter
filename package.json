@@ -1,6 +1,6 @@
 {
 	"name": "cli-proxy-adapter",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "islee23520/cli-proxy-adapter — CLIProxyAPIPlus bridge for Senpi/pi-agent variants (TS extension) and Grokomo/GrokBuild CLI variants (cliproxy-api-provider plugin). Catalog SSOT: ~/.agents/references/model-catalog.json. Families: Claude, Gemini, OpenAI/Codex, Grok, GLM, Kimi, \u2026",
 	"homepage": "https://github.com/islee23520/cli-proxy-adapter#readme",
 	"bugs": {
@@ -39,6 +39,7 @@
 	},
 	"files": [
 		"index.ts",
+		"CHANGELOG.md",
 		"plugins/**",
 		"scripts/**",
 		"README.md",

@@ -118,7 +118,7 @@ function cliList(envVar: string, fallback: readonly string[]): readonly string[]
 /** Model rows the extension must expose identically on every pi-family CLI. */
 const PI_MODEL_EXPECTATIONS = [
 	{ query: "gpt-5.5", needles: ["cliproxy", "gpt-5.5", "272K", "128K"], detail: "272K context / 128K output" },
-	{ query: "gpt-5.6-terra", needles: ["cliproxy", "gpt-5.6-terra", "921K", "128K"], detail: "921K input context / 128K output" },
+	{ query: "gpt-5.6-terra", needles: ["cliproxy", "gpt-5.6-terra", "1M", "128K"], detail: "1M total context / 128K output" },
 	{ query: "grok-build", needles: ["cliproxy", "grok-build-0.1", "256K", "no"], detail: "256K context, reasoning disabled" },
 ] as const;
 

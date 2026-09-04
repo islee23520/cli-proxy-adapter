@@ -11,11 +11,10 @@
 		"resolveJsonModule": true,
 		"isolatedModules": true,
 		"types": [
-			"./node_modules/@mariozechner/pi-coding-agent/node_modules/@types/node"
+			"node"
 		]
 	},
 	"include": [
-		"index.ts",
-		"metadata.test.ts"
+		"index.ts"
 	]
 }

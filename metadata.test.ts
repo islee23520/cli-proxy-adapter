@@ -125,7 +125,7 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 
 	test("gpt-5.6-sol uses the Codex subscription context limit", () => {
 		const m = resolveModelMetadata("gpt-5.6-sol");
-		expect(m.contextWindow).toBe(921_000);
+		expect(m.contextWindow).toBe(1_000_000);
 		expect(m.maxTokens).toBe(128_000);
 	});
 

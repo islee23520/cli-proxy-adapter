@@ -445,6 +445,7 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
 	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
 	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
+	"gpt-6-astra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 131_072 },
 	"gpt-image-1.5": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"gpt-image-2": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
@@ -473,6 +474,7 @@ function inferReasoning(id: string): boolean {
 		l.includes("gemini") ||
 		/\bo1\b|\bo3\b|\bo4\b/.test(l) ||
 		l.includes("gpt-5") ||
+		l.includes("gpt-6") ||
 		l.includes("thinking") ||
 		l.includes("reasoning") ||
 		l.includes("glm-4") ||
@@ -490,6 +492,7 @@ function inferImageInput(id: string): boolean {
 		l.includes("gpt-4o") ||
 		l.includes("gpt-4.") ||
 		l.includes("gpt-5") ||
+		l.includes("gpt-6") ||
 		l.includes("4o")
 	);
 }
@@ -517,6 +520,7 @@ function inferLimits(id: string): { contextWindow: number; maxTokens: number } {
 	if (l.includes("glm-4.5")) return { contextWindow: 131_072, maxTokens: 98_304 };
 	if (l.includes("glm")) return { contextWindow: 200_000, maxTokens: 131_072 };
 	if (l.includes("gpt-5.6")) return { contextWindow: 1_000_000, maxTokens: 128_000 };
+	if (l.includes("gpt-6")) return { contextWindow: 1_050_000, maxTokens: 128_000 };
 	if (l.includes("gpt-5.4") || l.includes("gpt-5.5")) return { contextWindow: 272_000, maxTokens: 128_000 };
 	if (l.includes("gpt-5")) return { contextWindow: 272_000, maxTokens: 128_000 };
 	if (l.includes("gpt-4.1")) return { contextWindow: 1_000_000, maxTokens: 32_768 };

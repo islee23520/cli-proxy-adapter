@@ -123,6 +123,14 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.maxTokens).toBe(128_000);
 	});
 
+	test("gpt-6-astra follows the official 1.05M OpenAI context", () => {
+		const m = resolveModelMetadata("gpt-6-astra");
+		expect(m.reasoning).toBe(true);
+		expect(m.input).toEqual(["text", "image"]);
+		expect(m.contextWindow).toBe(1_050_000);
+		expect(m.maxTokens).toBe(128_000);
+	});
+
 	test("gpt-5.6-sol uses the Codex subscription context limit", () => {
 		const m = resolveModelMetadata("gpt-5.6-sol");
 		expect(m.contextWindow).toBe(1_000_000);

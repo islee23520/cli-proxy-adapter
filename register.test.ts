@@ -112,6 +112,24 @@ describe("planRegistration (single cliproxy provider)", () => {
 		expect(plan.legacyProviders).toContain("cliproxy-openai");
 	});
 
+	test("preserves Fable ids returned by the proxy alongside other models", () => {
+		const plan = planRegistration([
+			{ id: "claude-opus-5", owned_by: "anthropic" },
+			{ id: "claude-fable-5", owned_by: "anthropic" },
+			{ id: "claude-fable-5-1", owned_by: "anthropic" },
+			{ id: "anthropic/claude-fable-5", owned_by: "anthropic" },
+			{ id: "gpt-5.6-sol", owned_by: "openai" },
+		]);
+
+		expect(plan.modelIds).toEqual([
+			"claude-opus-5",
+			"claude-fable-5",
+			"claude-fable-5-1",
+			"anthropic/claude-fable-5",
+			"gpt-5.6-sol",
+		]);
+	});
+
 	test("proxy failure during extension load does not write before Senpi owns the output surface", async () => {
 		const previousUrl = process.env.CLIPROXY_URL;
 		process.env.CLIPROXY_URL = "http://127.0.0.1:1";

@@ -13,8 +13,8 @@
  * cliproxy-gemini are unregistered on refresh so old picker entries vanish.
  *
  * Config is read from env vars (CLIPROXY_URL, CLIPROXY_API_KEY) first, then
- * ~/.senpi/agent/cliproxy.json, then legacy ~/.pi/agent/cliproxy.json
- * ({ "baseUrl": "...", "apiKey": "..." }).
+ * ~/.senpi/agent/cliproxy.json, ~/.pi/agent/cliproxy.json, then
+ * ~/.omo/cliproxy.json ({ "baseUrl": "...", "apiKey": "..." }).
  *
  * A missing API key is tolerated — CLIProxyAPIPlus accepts unauthenticated
  * requests when its own `api-keys:` list is empty. A dummy placeholder key
@@ -139,6 +139,7 @@ function loadConfig(): Config {
 	const configPath = firstExistingPath([
 		join(home, ".senpi", "agent", "cliproxy.json"),
 		join(home, ".pi", "agent", "cliproxy.json"),
+		join(home, ".omo", "cliproxy.json"),
 	]);
 	if (existsSync(configPath)) {
 		try {
@@ -165,7 +166,7 @@ function loadConfig(): Config {
 	const rawBaseUrl = envUrl || fileBase;
 	if (!rawBaseUrl) {
 		throw new Error(
-			"[cliproxy] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.senpi/agent/cliproxy.json (legacy: ~/.pi/agent/cliproxy.json)",
+			"[cliproxy] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.senpi/agent/cliproxy.json, ~/.pi/agent/cliproxy.json, or ~/.omo/cliproxy.json",
 		);
 	}
 	// Strip trailing slashes so we can safely append suffixes.
@@ -802,6 +803,9 @@ function registerCommands(pi: ExtensionAPI, cfg: Config) {
 
 export default async function (pi: ExtensionAPI): Promise<void> {
 	const cfg = loadConfig();
+	if (!process.env.PI_IMAGE_GEN_PROVIDER?.trim()) {
+		process.env.PI_IMAGE_GEN_PROVIDER = PROVIDER.providerName;
+	}
 	let initError: string | undefined;
 
 	let models: CLIProxyListModel[];

@@ -189,6 +189,59 @@ describe("planRegistration (single cliproxy provider)", () => {
 		}
 	});
 
+	test("loads OMO config and pins image generation when Senpi and pi configs are absent", async () => {
+		const previousHome = process.env.HOME;
+		const previousUrl = process.env.CLIPROXY_URL;
+		const previousKey = process.env.CLIPROXY_API_KEY;
+		const previousImageProvider = process.env.PI_IMAGE_GEN_PROVIDER;
+		const home = await mkdtemp(join(tmpdir(), "cliproxy-omo-"));
+		const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ data: [{ id: "gpt-6-astra", owned_by: "openai" }] }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		const pi = {
+			unregisterProvider: mock(() => undefined),
+			registerProvider: mock(() => undefined),
+			registerCommand: mock(() => undefined),
+			on: mock(() => undefined),
+		};
+
+		try {
+			delete process.env.CLIPROXY_URL;
+			delete process.env.CLIPROXY_API_KEY;
+			delete process.env.PI_IMAGE_GEN_PROVIDER;
+			process.env.HOME = home;
+			await mkdir(join(home, ".omo"), { recursive: true });
+			await writeFile(
+				join(home, ".omo", "cliproxy.json"),
+				JSON.stringify({ baseUrl: "http://omo.example", apiKey: "omo-key" }),
+			);
+
+			await Reflect.apply(registerExtension, undefined, [pi]);
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				"http://omo.example/v1/models",
+				expect.objectContaining({
+					headers: expect.objectContaining({ Authorization: "Bearer omo-key" }),
+				}),
+			);
+			expect(process.env.PI_IMAGE_GEN_PROVIDER).toBe("cliproxy");
+		} finally {
+			fetchSpy.mockRestore();
+			if (previousHome === undefined) delete process.env.HOME;
+			else process.env.HOME = previousHome;
+			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;
+			else process.env.CLIPROXY_URL = previousUrl;
+			if (previousKey === undefined) delete process.env.CLIPROXY_API_KEY;
+			else process.env.CLIPROXY_API_KEY = previousKey;
+			if (previousImageProvider === undefined) delete process.env.PI_IMAGE_GEN_PROVIDER;
+			else process.env.PI_IMAGE_GEN_PROVIDER = previousImageProvider;
+			await rm(home, { recursive: true, force: true });
+		}
+	});
+
 	test("normalizes GPT tool payloads through the provider request hook only", async () => {
 		const previousUrl = process.env.CLIPROXY_URL;
 		process.env.CLIPROXY_URL = "http://cliproxy.example";

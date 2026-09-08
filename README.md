@@ -181,6 +181,7 @@ plugin’s `config.json`):
   "baseUrl": "https://your-proxy.example.com/v1",
   "defaultModel": "grok-4.6",
   "webSearch": "grok-4.20-multi-agent-0309",
+  "xSearch": "grok-4.20-multi-agent-0309",
   "defaultReasoningEffort": "xhigh",
   "envKey": "XAI_API_KEY"
 }

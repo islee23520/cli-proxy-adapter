@@ -61,6 +61,7 @@ Also sets:
 
 - `[endpoints] models_base_url`
 - `[models] default` / `web_search` / `default_reasoning_effort`
+- `supports_backend_search` on Grok models that can run native `web_search` / `x_search` (catalog `backendSearch`, plus the configured `webSearch`/`xSearch` ids)
 - `[subagents.models] sisyphus` pin
 - `[model.grok-build]` alias → `grok-build-0.1`
 
@@ -96,6 +97,7 @@ Optional overrides (first found wins):
   "baseUrl": "http://127.0.0.1:8317/v1",
   "defaultModel": "grok-4.6",
   "webSearch": "grok-4.20-multi-agent-0309",
+  "xSearch": "grok-4.20-multi-agent-0309",
   "defaultReasoningEffort": "xhigh",
   "envKey": "XAI_API_KEY",
   "catalogPath": "~/.agents/references/model-catalog.json",
@@ -124,7 +126,7 @@ Env:
 | Want to change… | Edit… |
 |-----------------|--------|
 | UI / plugins / MCP | `~/.grok/config.user.toml`, then re-run sync (or restart) |
-| Default model / web_search | plugin `config.json`, then `--force` sync |
+| Default model / web_search / x_search model | plugin `config.json` (`webSearch`, `xSearch`), then `--force` sync |
 | A model's true context window | `~/.agents/references/model-catalog.json`, then `--force` sync |
 | Model list | live CLIProxy `/v1/models` (auto on next sync) |
 

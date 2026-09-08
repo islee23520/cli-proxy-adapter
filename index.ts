@@ -387,6 +387,11 @@ export function normalizeKimiToolParameterTypes(payload: unknown): unknown {
 //      - xAI:       https://docs.x.ai/developers/models/<model-id>
 //      - Kimi:      https://platform.kimi.ai/docs/models
 //      - Z.ai:      https://docs.z.ai/guides/llm/<model>.md
+//      - 2026-09-03 survey: the live CLIProxy route's advertised `context_length`
+//        and `max_completion_tokens` from GET /v1/models (see
+//        ~/.omo/evidence/cliproxy-context-windows-20260903.md). Route-advertised
+//        values win for subscription gateways, including when HIGHER than the
+//        historical table (grok-4.20 = 2M, gpt-5.4 = 1.05M).
 //
 // 3. reasoning — from the proxy's `supports_reasoning_effort` flag (mirrored
 //    in ~/.grok/config.toml). The proxy's flag reflects what the backend
@@ -407,8 +412,16 @@ export function normalizeKimiToolParameterTypes(payload: unknown): unknown {
 // yet listed here; any model the proxy serves should eventually get an explicit
 // entry.
 const MODEL_METADATA: Record<string, ModelMetadata> = {
-	"claude-opus-4-6-thinking": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
-	"claude-sonnet-4-6": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
+	"claude-3-5-haiku-20241022": { reasoning: false, input: ["text", "image"], contextWindow: 128_000, maxTokens: 8_192 },
+	"claude-3-7-sonnet-20250219": { reasoning: true, input: ["text", "image"], contextWindow: 128_000, maxTokens: 8_192 },
+	"claude-haiku-4-5-20251001": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 64_000 },
+	"claude-opus-4-1-20250805": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 32_000 },
+	"claude-opus-4-20250514": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 32_000 },
+	"claude-opus-4-5-20251101": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 64_000 },
+	"claude-opus-4-6-thinking": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 64_000 },
+	"claude-sonnet-4-20250514": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 64_000 },
+	"claude-sonnet-4-5-20250929": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 64_000 },
+	"claude-sonnet-4-6": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 64_000 },
 	"gemini-3-flash": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-3-flash-agent": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-3.1-flash-image": { reasoning: false, input: ["text", "image"], contextWindow: 131_072, maxTokens: 32_768 },
@@ -426,28 +439,28 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"kimi-k3": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 131_072 },
 	"grok-3-mini": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 131_072 },
 	"grok-3-mini-fast": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 131_072 },
-	"grok-4.20-0309-non-reasoning": { reasoning: false, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 1_000_000 },
-	"grok-4.20-0309-reasoning": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 1_000_000 },
-	"grok-4.20-multi-agent-0309": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 1_000_000 },
+	"grok-4.20-0309-non-reasoning": { reasoning: false, input: ["text", "image"], contextWindow: 2_000_000, maxTokens: 65_536 },
+	"grok-4.20-0309-reasoning": { reasoning: true, input: ["text", "image"], contextWindow: 2_000_000, maxTokens: 65_536 },
+	"grok-4.20-multi-agent-0309": { reasoning: true, input: ["text", "image"], contextWindow: 2_000_000, maxTokens: 65_536 },
 	"grok-4.3": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 1_000_000 },
 	"grok-4.5": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 500_000 },
 	"grok-4.6": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 500_000 },
 	"grok-build-0.1": { reasoning: false, input: ["text", "image"], contextWindow: 256_000, maxTokens: 256_000 },
-	"grok-composer-2.5-fast": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
+	"grok-composer-2.5-fast": { reasoning: false, input: ["text"], contextWindow: 200_000, maxTokens: 32_768 },
 	"grok-imagine-image": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"grok-imagine-image-quality": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"grok-imagine-video": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"grok-imagine-video-1.5-preview": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"codex-auto-review": { reasoning: true, input: ["text"], contextWindow: 272_000, maxTokens: 128_000 },
 	"gpt-5.3-codex-spark": { reasoning: true, input: ["text"], contextWindow: 128_000, maxTokens: 32_000 },
-	"gpt-5.4": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
+	"gpt-5.4": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-5.4-mini": { reasoning: true, input: ["text", "image"], contextWindow: 400_000, maxTokens: 128_000 },
 	"gpt-5.5": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
 	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
 	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
 	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
 	"gpt-6-astra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
-	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 131_072 },
+	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 114_000, maxTokens: 32_768 },
 	"gpt-image-1.5": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"gpt-image-2": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"glm-4.5": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 98_304 },

@@ -137,6 +137,64 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.maxTokens).toBe(128_000);
 	});
 
+	test("claude-opus-4-6-thinking follows the live antigravity 200K route", () => {
+		const m = resolveModelMetadata("claude-opus-4-6-thinking");
+		expect(m.contextWindow).toBe(200_000);
+		expect(m.maxTokens).toBe(64_000);
+	});
+
+	test("claude-sonnet-4-6 follows the live 200K route", () => {
+		const m = resolveModelMetadata("claude-sonnet-4-6");
+		expect(m.contextWindow).toBe(200_000);
+		expect(m.maxTokens).toBe(64_000);
+	});
+
+	test("gpt-5.4 uses the live 1.05M Codex route and fast inherits it", () => {
+		expect(resolveModelMetadata("gpt-5.4").contextWindow).toBe(1_050_000);
+		expect(resolveModelMetadata("gpt-5.4-fast").contextWindow).toBe(1_050_000);
+	});
+
+	test("grok-4.20-0309-reasoning uses the live 2M route", () => {
+		const m = resolveModelMetadata("grok-4.20-0309-reasoning");
+		expect(m.contextWindow).toBe(2_000_000);
+		expect(m.maxTokens).toBe(65_536);
+	});
+
+	test("grok-4.20-multi-agent-0309 uses the live 2M route", () => {
+		const m = resolveModelMetadata("grok-4.20-multi-agent-0309");
+		expect(m.contextWindow).toBe(2_000_000);
+		expect(m.maxTokens).toBe(65_536);
+	});
+
+	test("grok-4.20-0309-non-reasoning uses the live 2M route", () => {
+		const m = resolveModelMetadata("grok-4.20-0309-non-reasoning");
+		expect(m.contextWindow).toBe(2_000_000);
+		expect(m.maxTokens).toBe(65_536);
+	});
+
+	test("grok-composer-2.5-fast follows the live 200K route", () => {
+		const m = resolveModelMetadata("grok-composer-2.5-fast");
+		expect(m.contextWindow).toBe(200_000);
+		expect(m.maxTokens).toBe(32_768);
+	});
+
+	test("gpt-oss-120b-medium follows the live 114K route", () => {
+		const m = resolveModelMetadata("gpt-oss-120b-medium");
+		expect(m.contextWindow).toBe(114_000);
+		expect(m.maxTokens).toBe(32_768);
+	});
+
+	test("dated 200K claude models get explicit entries, not the 1M fallback", () => {
+		expect(resolveModelMetadata("claude-haiku-4-5-20251001")).toMatchObject({ contextWindow: 200_000, maxTokens: 64_000 });
+		expect(resolveModelMetadata("claude-opus-4-1-20250805")).toMatchObject({ contextWindow: 200_000, maxTokens: 32_000 });
+		expect(resolveModelMetadata("claude-opus-4-20250514")).toMatchObject({ contextWindow: 200_000, maxTokens: 32_000 });
+		expect(resolveModelMetadata("claude-opus-4-5-20251101")).toMatchObject({ contextWindow: 200_000, maxTokens: 64_000 });
+		expect(resolveModelMetadata("claude-sonnet-4-20250514")).toMatchObject({ contextWindow: 200_000, maxTokens: 64_000 });
+		expect(resolveModelMetadata("claude-sonnet-4-5-20250929")).toMatchObject({ contextWindow: 200_000, maxTokens: 64_000 });
+		expect(resolveModelMetadata("claude-3-5-haiku-20241022")).toMatchObject({ contextWindow: 128_000, maxTokens: 8_192 });
+		expect(resolveModelMetadata("claude-3-7-sonnet-20250219")).toMatchObject({ contextWindow: 128_000, maxTokens: 8_192 });
+	});
+
 	test("gpt fast ids inherit their live base-model metadata and overrides", () => {
 		const metadata = resolveModelMetadata("gpt-5.4-mini-fast");
 		expect(metadata.contextWindow).toBe(400_000);

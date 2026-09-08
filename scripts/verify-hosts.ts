@@ -153,8 +153,11 @@ function verifyGrokCli(cli: string): void {
 }
 
 function configuredBaseUrl(): string | undefined {
-	if (process.env.CLIPROXY_URL) return process.env.CLIPROXY_URL;
+	// CLIPROXY_BASE_URL first, mirroring sync-models.mjs: an ambient CLIPROXY_URL
+	// (e.g. exported in a shell profile) must not hijack the sandboxed
+	// composition smoke away from its own fixture.
 	if (process.env.CLIPROXY_BASE_URL) return process.env.CLIPROXY_BASE_URL;
+	if (process.env.CLIPROXY_URL) return process.env.CLIPROXY_URL;
 	for (const homeDir of [".grok", ".grokomo"]) {
 		const configPath = join(homedir(), homeDir, "config.toml");
 		if (!existsSync(configPath)) continue;

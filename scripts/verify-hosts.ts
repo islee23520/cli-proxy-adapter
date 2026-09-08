@@ -117,18 +117,18 @@ function cliList(envVar: string, fallback: readonly string[]): readonly string[]
 
 /** Model rows the extension must expose identically on every pi-family CLI. */
 const PI_MODEL_EXPECTATIONS = [
-	{ query: "gpt-5.5", needles: ["cliproxy", "gpt-5.5", "272K", "128K"], detail: "272K context / 128K output" },
-	{ query: "gpt-5.6-terra", needles: ["cliproxy", "gpt-5.6-terra", "1M", "128K"], detail: "1M total context / 128K output" },
-	{ query: "grok-build", needles: ["cliproxy", "grok-build-0.1", "256K", "no"], detail: "256K context, reasoning disabled" },
+	{ query: "gpt-5.5", needles: ["cpa", "gpt-5.5", "272K", "128K"], detail: "272K context / 128K output" },
+	{ query: "gpt-5.6-terra", needles: ["cpa", "gpt-5.6-terra", "1M", "128K"], detail: "1M total context / 128K output" },
+	{ query: "grok-build", needles: ["cpa", "grok-build-0.1", "256K", "no"], detail: "256K context, reasoning disabled" },
 ] as const;
 
 function verifyPiCli(cli: string): void {
 	const extensionArgs = cli === "pi" ? ["--no-extensions", "--extension", resolve(root, "index.ts")] : [];
 	for (const { query, needles, detail } of PI_MODEL_EXPECTATIONS) {
 		check(`${cli} ${query}`, () => {
-			const output = run(cli, [...extensionArgs, "--list-models", query, "--provider", "cliproxy", "--offline"]);
+			const output = run(cli, [...extensionArgs, "--list-models", query, "--provider", "cpa", "--offline"]);
 			for (const needle of needles) requireIncludes(output, needle, `${cli} ${query}`);
-			return `cliproxy model metadata loaded with ${detail}`;
+			return `cpa model metadata loaded with ${detail}`;
 		});
 	}
 }

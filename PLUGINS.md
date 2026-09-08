@@ -15,15 +15,15 @@ This repo ships **one catalog SSOT** and **two runtimes**:
 
 ## Senpi / pi-agent path
 
-Registers a single `cliproxy` provider (openai-completions + `/v1`) via `registerProvider`,
+Registers a single `cpa` provider (openai-completions + `/v1`) via `registerProvider`,
 using `MODEL_METADATA` mirrored from the catalog.
 
 ```bash
 senpi install .
-senpi --list-models grok-4.6 --provider cliproxy
-senpi --provider cliproxy --model grok-4.6
-senpi --provider cliproxy --model glm-5.2
-senpi --provider cliproxy --model kimi-k3
+senpi --list-models grok-4.6 --provider cpa
+senpi --provider cpa --model grok-4.6
+senpi --provider cpa --model glm-5.2
+senpi --provider cpa --model kimi-k3
 ```
 
 Legacy CLIs that still expose `pi install` are supported by the same `index.ts` extension.

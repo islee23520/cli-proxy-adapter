@@ -41,9 +41,9 @@ config for each host (see below).
 
 ## Install for Senpi / pi-agent variants
 
-Registers a single provider name: **`cliproxy`**
+Registers a single provider name: **`cpa`**
 (`openai-completions` + `/v1`). Every discovered model appears under it
-(e.g. `cliproxy/kimi-k3`, `cliproxy/grok-4.6`).
+(e.g. `cpa/kimi-k3`, `cpa/grok-4.6`).
 
 ### 1. Install the extension
 
@@ -57,8 +57,8 @@ senpi install .
 pi install .
 
 # fallback if `pi install` is unavailable
-mkdir -p ~/.pi/agent/extensions/cliproxy
-ln -sfn "$(pwd)/index.ts" ~/.pi/agent/extensions/cliproxy/index.ts
+mkdir -p ~/.pi/agent/extensions/cpa
+ln -sfn "$(pwd)/index.ts" ~/.pi/agent/extensions/cpa/index.ts
 ```
 
 One-shot test without installing:
@@ -97,22 +97,22 @@ Missing API key is tolerated (placeholder is sent). If the proxy’s
 ### 3. Use it
 
 ```bash
-senpi --list-models cliproxy
-senpi --provider cliproxy --model kimi-k3
-senpi --provider cliproxy --model grok-4.6
-senpi --provider cliproxy --model glm-5.2
+senpi --list-models cpa
+senpi --provider cpa --model kimi-k3
+senpi --provider cpa --model grok-4.6
+senpi --provider cpa --model glm-5.2
 ```
 
-In a session: `Ctrl+P` / `/model`, then pick a `cliproxy/…` model.
+In a session: `Ctrl+P` / `/model`, then pick a `cpa/…` model.
 
 | Slash command | Effect |
 |---------------|--------|
-| `/cliproxy-status` | Ping proxy, model count, auth info |
-| `/cliproxy-models` | List models grouped by `owned_by` |
-| `/cliproxy-refresh` | Re-fetch `/v1/models` and re-register |
+| `/cpa-status` | Ping proxy, model count, auth info |
+| `/cpa-models` | List models grouped by `owned_by` |
+| `/cpa-refresh` | Re-fetch `/v1/models` and re-register |
 
-Legacy provider names `cliproxy-openai` and `cliproxy-gemini` are unregistered
-on load and on `/cliproxy-refresh`.
+Legacy provider names `cliproxy-openai`, `cliproxy-gemini` and `cliproxy` are unregistered
+on load and on `/cpa-refresh`.
 
 Each model carries a shared compat block so backends that reject OpenAI-only
 fields (e.g. Kimi K3) still tokenize cleanly:
@@ -229,7 +229,7 @@ You still must set **pi** `CLIPROXY_URL` / `~/.pi/agent/cliproxy.json` and
   `MODEL_METADATA` / the catalog; costs are `0` (subscription, not token bill).
 - **pi startup** — if the proxy is down at load, the extension still registers
   with a static fallback list (no noisy console warn before the host owns I/O).
-  Use `/cliproxy-refresh` when the proxy is up.
+  Use `/cpa-refresh` when the proxy is up.
 - **Grok sync** — if the proxy is down, the hook skips and leaves config alone.
 - Auth headers are host/SDK-specific; pi does not invent a global Bearer for
   every backend.
@@ -253,7 +253,7 @@ curl -s "${CLIPROXY_URL:-http://127.0.0.1:8317}/v1/models" | jq '.data | length'
 **`302` / `unauthorized`** — link the upstream account in the proxy `auths/`
 dir, or use a key that matches the proxy’s `api-keys:` list.
 
-**Models missing in pi** — `/cliproxy-refresh` or restart `pi`.
+**Models missing in pi** — `/cpa-refresh` or restart `pi`.
 
 **Models wrong in Grok** — re-run:
 

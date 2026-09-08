@@ -4,13 +4,13 @@
  * Registers models served by a local/remote CLIProxyAPIPlus instance
  * (https://github.com/router-for-me/CLIProxyAPIPlus) as a single pi provider:
  *
- *   cliproxy -> every model via openai-completions (baseUrl "/v1")
+ *   cpa -> every model via openai-completions (baseUrl "/v1")
  *
  * CLIProxyAPIPlus already exposes a unified OpenAI-compatible surface at
  * `/v1`, so Anthropic / Gemini / OpenAI / Kimi / GLM / Grok ids all share
- * one provider name and the openai-completions + compat block (formerly only
- * used by cliproxy-openai). Legacy provider names cliproxy-openai and
- * cliproxy-gemini are unregistered on refresh so old picker entries vanish.
+ * one provider name and the openai-completions + compat block. Legacy provider
+ * names cliproxy-openai, cliproxy-gemini and cliproxy are unregistered on
+ * refresh so old picker entries vanish.
  *
  * Config is read from env vars (CLIPROXY_URL, CLIPROXY_API_KEY) first, then
  * ~/.senpi/agent/cliproxy.json, ~/.pi/agent/cliproxy.json, then
@@ -78,7 +78,7 @@ type ThinkingLevelMap = {
 
 /** Single provider: all CLIProxy models via openai-completions at /v1. */
 const PROVIDER = {
-	providerName: "cliproxy",
+	providerName: "cpa",
 	api: "openai-completions" as const,
 	baseSuffix: "/v1" as const,
 	compat: {
@@ -90,7 +90,7 @@ const PROVIDER = {
 };
 
 /** Old multi-family provider names removed after the unified registration. */
-const LEGACY_PROVIDERS = ["cliproxy-openai", "cliproxy-gemini"] as const;
+const LEGACY_PROVIDERS = ["cliproxy-openai", "cliproxy-gemini", "cliproxy"] as const;
 
 /** Pure plan for registration — exported so tests can lock the single-provider contract. */
 export interface RegistrationPlan {
@@ -118,8 +118,8 @@ export function planRegistration(rawModels: CLIProxyListModel[]): RegistrationPl
 // CLIProxyAPIPlus ignores it when its `api-keys:` list is empty.
 const PLACEHOLDER_KEY = "no-key";
 
-// Snapshot of the last-known raw model list; used by /cliproxy-models and
-// /cliproxy-status for a nice grouped view.
+// Snapshot of the last-known raw model list; used by /cpa-models and
+// /cpa-status for a nice grouped view.
 let lastFetched: CLIProxyListModel[] = [];
 let lastCount = 0;
 
@@ -158,7 +158,7 @@ function loadConfig(): Config {
 				fileMaxTokensOverrides = parsed.maxTokensOverrides;
 			}
 		} catch (err) {
-			console.warn(`[cliproxy] Failed to parse ${configPath}: ${(err as Error).message}`);
+			console.warn(`[cpa] Failed to parse ${configPath}: ${(err as Error).message}`);
 		}
 	}
 
@@ -166,7 +166,7 @@ function loadConfig(): Config {
 	const rawBaseUrl = envUrl || fileBase;
 	if (!rawBaseUrl) {
 		throw new Error(
-			"[cliproxy] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.senpi/agent/cliproxy.json, ~/.pi/agent/cliproxy.json, or ~/.omo/cliproxy.json",
+			"[cpa] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.senpi/agent/cliproxy.json, ~/.pi/agent/cliproxy.json, or ~/.omo/cliproxy.json",
 		);
 	}
 	// Strip trailing slashes so we can safely append suffixes.
@@ -371,7 +371,7 @@ export function normalizeKimiToolParameterTypes(payload: unknown): unknown {
 // 1. Model LIST (which ids exist) — from the live CLIProxyAPIPlus `/v1/models`
 //    endpoint. Reconcile with:
 //      curl -s -H "Authorization: Bearer $CLIPROXY_API_KEY" $CLIPROXY_URL/v1/models
-//    (or `/cliproxy-models` from inside pi). Every id the proxy serves MUST
+//    (or `/cpa-models` from inside pi). Every id the proxy serves MUST
 //    have an explicit entry below.
 //
 // 2. contextWindow — from each model's OFFICIAL VENDOR DOCS, except subscription
@@ -691,7 +691,7 @@ function registerFamilies(pi: ExtensionAPI, cfg: Config, rawModels: CLIProxyList
 	const plan = planRegistration(rawModels);
 	const models = rawModels.map((m) => toProviderModel(m, cfg));
 
-	// Drop legacy multi-family provider names so the picker only shows cliproxy/*.
+	// Drop legacy multi-family provider names so the picker only shows cpa/*.
 	for (const name of plan.legacyProviders) {
 		try {
 			pi.unregisterProvider(name);
@@ -734,8 +734,8 @@ function notify(ctx: ExtensionContext | ExtensionCommandContext, msg: string, ki
 		(ctx as ExtensionContext).ui.notify(msg, kind as any);
 	} else {
 		// Headless: map to a sensible stream.
-		if (kind === "error") console.error(`[cliproxy] ${msg}`);
-		else console.log(`[cliproxy] ${msg}`);
+		if (kind === "error") console.error(`[cpa] ${msg}`);
+		else console.log(`[cpa] ${msg}`);
 	}
 }
 
@@ -750,7 +750,7 @@ function groupByOwner(models: CLIProxyListModel[]): Record<string, string[]> {
 }
 
 function registerCommands(pi: ExtensionAPI, cfg: Config) {
-	pi.registerCommand("cliproxy-status", {
+	pi.registerCommand("cpa-status", {
 		description: "Ping CLIProxyAPIPlus and report model count",
 		handler: async (_args, ctx) => {
 			try {
@@ -771,7 +771,7 @@ function registerCommands(pi: ExtensionAPI, cfg: Config) {
 		},
 	});
 
-	pi.registerCommand("cliproxy-models", {
+	pi.registerCommand("cpa-models", {
 		description: "List all available CLIProxyAPIPlus models grouped by owner",
 		handler: async (_args, ctx) => {
 			try {
@@ -794,7 +794,7 @@ function registerCommands(pi: ExtensionAPI, cfg: Config) {
 		},
 	});
 
-	pi.registerCommand("cliproxy-refresh", {
+	pi.registerCommand("cpa-refresh", {
 		description: "Re-fetch the CLIProxyAPIPlus model list and re-register providers",
 		handler: async (_args, ctx) => {
 			try {
@@ -852,7 +852,7 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		if (!ctx.hasUI) return;
 		if (initError) {
 			ctx.ui.notify(
-				`CLIProxy unreachable (${initError}). Loaded ${lastCount} fallback models — /cliproxy-refresh to retry.`,
+				`CLIProxy unreachable (${initError}). Loaded ${lastCount} fallback models — /cpa-refresh to retry.`,
 				"warning",
 			);
 		} else {

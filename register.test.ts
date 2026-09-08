@@ -77,7 +77,7 @@ describe("normalizeKimiToolParameterTypes", () => {
 	});
 });
 
-describe("planRegistration (single cliproxy provider)", () => {
+describe("planRegistration (single cpa provider)", () => {
 	test("puts every model under cliproxy with openai-completions + /v1", () => {
 		const plan = planRegistration([
 			{ id: "claude-sonnet-4-5", owned_by: "anthropic" },
@@ -86,7 +86,7 @@ describe("planRegistration (single cliproxy provider)", () => {
 			{ id: "grok-4.5", owned_by: "xai" },
 		]);
 
-		expect(plan.providerName).toBe("cliproxy");
+		expect(plan.providerName).toBe("cpa");
 		expect(plan.api).toBe("openai-completions");
 		expect(plan.baseSuffix).toBe("/v1");
 		expect(plan.modelIds).toEqual([
@@ -95,7 +95,7 @@ describe("planRegistration (single cliproxy provider)", () => {
 			"kimi-k3",
 			"grok-4.5",
 		]);
-		expect(plan.legacyProviders).toEqual(["cliproxy-openai", "cliproxy-gemini"]);
+		expect(plan.legacyProviders).toEqual(["cliproxy-openai", "cliproxy-gemini", "cliproxy"]);
 		expect(plan.compat).toEqual({
 			supportsStore: false,
 			supportsDeveloperRole: false,
@@ -106,10 +106,11 @@ describe("planRegistration (single cliproxy provider)", () => {
 
 	test("empty model list still targets cliproxy and legacy unregisters", () => {
 		const plan = planRegistration([]);
-		expect(plan.providerName).toBe("cliproxy");
+		expect(plan.providerName).toBe("cpa");
 		expect(plan.modelIds).toEqual([]);
 		expect(plan.legacyProviders).toContain("cliproxy-gemini");
 		expect(plan.legacyProviders).toContain("cliproxy-openai");
+		expect(plan.legacyProviders).toContain("cliproxy");
 	});
 
 	test("preserves Fable ids returned by the proxy alongside other models", () => {
@@ -245,7 +246,7 @@ describe("planRegistration (single cliproxy provider)", () => {
 					headers: expect.objectContaining({ Authorization: "Bearer omo-key" }),
 				}),
 			);
-			expect(process.env.PI_IMAGE_GEN_PROVIDER).toBe("cliproxy");
+			expect(process.env.PI_IMAGE_GEN_PROVIDER).toBe("cpa");
 		} finally {
 			fetchSpy.mockRestore();
 			if (previousHome === undefined) delete process.env.HOME;
@@ -282,10 +283,10 @@ describe("planRegistration (single cliproxy provider)", () => {
 			const handler = handlers.get("before_provider_request");
 			expect(handler).toBeDefined();
 			const payload = { tools: [{ type: "function", function: { name: "ping", parameters: {} } }] };
-			expect(handler?.({ payload }, { model: { provider: "cliproxy", id: "gpt-5.6-sol" } })).toEqual({
+			expect(handler?.({ payload }, { model: { provider: "cpa", id: "gpt-5.6-sol" } })).toEqual({
 				tools: [{ type: "function", function: { name: "ping", parameters: { type: "object" } } }],
 			});
-			expect(handler?.({ payload }, { model: { provider: "cliproxy", id: "kimi-k3" } })).toEqual({
+			expect(handler?.({ payload }, { model: { provider: "cpa", id: "kimi-k3" } })).toEqual({
 				tools: [{ type: "function", function: { name: "ping", parameters: { type: "object" } } }],
 			});
 			expect(handler?.({ payload }, { model: { provider: "openai", id: "gpt-5.6-sol" } })).toBeUndefined();
@@ -330,11 +331,11 @@ describe("planRegistration (single cliproxy provider)", () => {
 					},
 				}],
 			};
-			const sessionModel = { provider: "cliproxy", id: "grok-4.5" };
+			const sessionModel = { provider: "cpa", id: "grok-4.5" };
 
 			// A subagent dispatching to kimi-k3 from a grok-4.5 session must still
 			// get the Moonshot flattening, which ctx.model alone would skip.
-			expect(handler?.({ payload, model: { provider: "cliproxy", id: "kimi-k3" } }, { model: sessionModel })).toEqual({
+			expect(handler?.({ payload, model: { provider: "cpa", id: "kimi-k3" } }, { model: sessionModel })).toEqual({
 				tools: [{
 					type: "function",
 					function: {
@@ -350,11 +351,11 @@ describe("planRegistration (single cliproxy provider)", () => {
 
 			// The reverse: a non-cliproxy request from a cliproxy session is left alone.
 			expect(
-				handler?.({ payload, model: { provider: "anthropic", id: "claude-opus-4-6" } }, { model: { provider: "cliproxy", id: "kimi-k3" } }),
+				handler?.({ payload, model: { provider: "anthropic", id: "claude-opus-4-6" } }, { model: { provider: "cpa", id: "kimi-k3" } }),
 			).toBeUndefined();
 
 			// Hosts that do not populate event.model still fall back to ctx.model.
-			expect(handler?.({ payload }, { model: { provider: "cliproxy", id: "kimi-k3" } })).toBeDefined();
+			expect(handler?.({ payload }, { model: { provider: "cpa", id: "kimi-k3" } })).toBeDefined();
 		} finally {
 			fetchSpy.mockRestore();
 			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;

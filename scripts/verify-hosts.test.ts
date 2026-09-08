@@ -49,7 +49,7 @@ test("verify-hosts composes active metadata from a faithful isolated model fixtu
 	sandboxes.push(sandbox);
 	const bin = join(sandbox, "bin");
 	await mkdir(bin, { recursive: true });
-	const piFamilyOutput = "cliproxy gpt-5.5 272K 128K\ncliproxy gpt-5.6-terra 1M 128K\ncliproxy grok-build-0.1 256K no";
+	const piFamilyOutput = "cpa gpt-5.5 272K 128K\ncpa gpt-5.6-terra 1M 128K\ncpa grok-build-0.1 256K no";
 	const grokFamilyOutput = "Plugin manifest is valid: cliproxy-api-provider";
 	await writeCommand(join(bin, "senpi"), piFamilyOutput);
 	await writeCommand(join(bin, "pi"), piFamilyOutput);
@@ -96,7 +96,7 @@ test("verify-hosts skips absent original CLIs on a fork-only machine without fai
 	sandboxes.push(sandbox);
 	const bin = join(sandbox, "bin");
 	await mkdir(bin, { recursive: true });
-	await writeCommand(join(bin, "senpi"), "cliproxy gpt-5.5 272K 128K\ncliproxy gpt-5.6-terra 1M 128K\ncliproxy grok-build-0.1 256K no");
+	await writeCommand(join(bin, "senpi"), "cpa gpt-5.5 272K 128K\ncpa gpt-5.6-terra 1M 128K\ncpa grok-build-0.1 256K no");
 	await writeCommand(join(bin, "grokomo"), "Plugin manifest is valid: cliproxy-api-provider");
 	const baseUrl = await startModelFixture();
 

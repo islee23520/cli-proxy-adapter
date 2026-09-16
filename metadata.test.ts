@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { resolveModelMetadata, toProviderModel } from "./index.ts";
 
+const MAX_CONTEXT_WINDOW = 850_000;
+
 describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 	test("grok-4.5 matches xAI docs + catalog: reasoning, image, 500k", () => {
 		const m = resolveModelMetadata("grok-4.5");
@@ -210,6 +212,27 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		);
 		expect(model.contextWindow).toBe(360_000);
 		expect(model.maxTokens).toBe(120_000);
+	});
+
+	test("provider registration caps every model and override at 850K", () => {
+		for (const id of ["gpt-6-astra", "grok-4.20-0309-reasoning", "kimi-k3", "totally-unknown-claude-model"]) {
+			const model = toProviderModel(
+				{ id, owned_by: "test" },
+				{
+					baseUrl: "http://x",
+					apiKey: "k",
+					contextOverrides: { [id]: 2_000_000 },
+					maxTokensOverrides: {},
+				},
+			);
+			expect(model.contextWindow).toBe(MAX_CONTEXT_WINDOW);
+		}
+
+		const smaller = toProviderModel(
+			{ id: "gpt-5.5", owned_by: "openai" },
+			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
+		);
+		expect(smaller.contextWindow).toBe(272_000);
 	});
 
 });

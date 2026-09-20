@@ -2,6 +2,7 @@
 
 ## Unreleased - 2026-09-08
 
+- Remove the adapter's 850,000-token context-window ceiling so model metadata and configured overrides are registered unchanged.
 - Rename the pi provider id `cliproxy` to `cpa`; legacy `cliproxy`, `cliproxy-openai` and `cliproxy-gemini` entries unregister on load and refresh.
 - Rename slash commands to `/cpa-status`, `/cpa-models`, `/cpa-refresh`; the `PI_IMAGE_GEN_PROVIDER` pin now resolves to `cpa`.
 

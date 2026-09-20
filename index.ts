@@ -226,8 +226,6 @@ async function fetchModels(cfg: Config): Promise<CLIProxyListModel[]> {
 
 interface ModelMetadata { reasoning: boolean; input: ("text" | "image")[]; contextWindow: number; maxTokens: number; }
 
-const MAX_CONTEXT_WINDOW = 850_000;
-
 type ToolRequestPayload = {
 	tools?: Array<{
 		type?: unknown;
@@ -634,8 +632,7 @@ export function thinkingLevelMapFor(id: string): ThinkingLevelMap | undefined {
 export function toProviderModel(m: CLIProxyListModel, cfg: Config): PiModelConfig {
 	const meta = resolveModelMetadata(m.id);
 	const fastTierBaseId = gptFastTierBaseId(m.id);
-	const configuredContextWindow = cfg.contextOverrides[m.id] ?? (fastTierBaseId ? cfg.contextOverrides[fastTierBaseId] : undefined) ?? meta.contextWindow;
-	const contextWindow = Math.min(configuredContextWindow, MAX_CONTEXT_WINDOW);
+	const contextWindow = cfg.contextOverrides[m.id] ?? (fastTierBaseId ? cfg.contextOverrides[fastTierBaseId] : undefined) ?? meta.contextWindow;
 	const maxTokens = cfg.maxTokensOverrides[m.id] ?? (fastTierBaseId ? cfg.maxTokensOverrides[fastTierBaseId] : undefined) ?? meta.maxTokens;
 	// Kimi K3 needs moonshot tool-schema flavor + a correct thinkingLevelMap so
 	// Senpi's defaultThinkingLevel `max` lands as reasoning_effort=max (not a

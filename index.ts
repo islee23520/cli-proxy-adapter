@@ -376,9 +376,9 @@ export function normalizeKimiToolParameterTypes(payload: unknown): unknown {
 //
 // 2. contextWindow — from each model's OFFICIAL VENDOR DOCS, except subscription
 //    gateways whose live route publishes a lower effective input limit.
-//    GPT-5.6 supports 922K input + 128K output in the direct API. The current
-//    ChatGPT Pro Codex route exposes an 872K input override ceiling; Senpi
-//    subtracts maxTokens from contextWindow, so register a 1M total budget.
+//    GPT-5.6 supports 922K input + 128K output in the direct API. Senpi
+//    subtracts maxTokens from contextWindow, so register the official 1.05M
+//    total budget to preserve the documented 922K input allowance.
 //    Always cite the source page in the commit message when changing a window.
 //    Sources used:
 //      - Anthropic: https://platform.claude.com/docs/en/docs/about-claude/models/overview
@@ -456,9 +456,9 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"gpt-5.4": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-5.4-mini": { reasoning: true, input: ["text", "image"], contextWindow: 400_000, maxTokens: 128_000 },
 	"gpt-5.5": { reasoning: true, input: ["text", "image"], contextWindow: 272_000, maxTokens: 128_000 },
-	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
-	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
-	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 128_000 },
+	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-6-astra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 114_000, maxTokens: 32_768 },
 	"gpt-image-1.5": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
@@ -533,7 +533,7 @@ function inferLimits(id: string): { contextWindow: number; maxTokens: number } {
 	if (l.includes("glm-4.6") || l.includes("glm-4.7") || l.includes("glm-5")) return { contextWindow: 200_000, maxTokens: 131_072 };
 	if (l.includes("glm-4.5")) return { contextWindow: 131_072, maxTokens: 98_304 };
 	if (l.includes("glm")) return { contextWindow: 200_000, maxTokens: 131_072 };
-	if (l.includes("gpt-5.6")) return { contextWindow: 1_000_000, maxTokens: 128_000 };
+	if (l.includes("gpt-5.6")) return { contextWindow: 1_050_000, maxTokens: 128_000 };
 	if (l.includes("gpt-6")) return { contextWindow: 1_050_000, maxTokens: 128_000 };
 	if (l.includes("gpt-5.4") || l.includes("gpt-5.5")) return { contextWindow: 272_000, maxTokens: 128_000 };
 	if (l.includes("gpt-5")) return { contextWindow: 272_000, maxTokens: 128_000 };

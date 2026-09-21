@@ -131,10 +131,13 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.maxTokens).toBe(128_000);
 	});
 
-	test("gpt-5.6-sol uses the Codex subscription context limit", () => {
+	test("gpt-5.6 family follows the official 1.05M OpenAI context", () => {
 		const m = resolveModelMetadata("gpt-5.6-sol");
-		expect(m.contextWindow).toBe(1_000_000);
+		expect(m.contextWindow).toBe(1_050_000);
 		expect(m.maxTokens).toBe(128_000);
+		expect(resolveModelMetadata("gpt-5.6-terra").contextWindow).toBe(1_050_000);
+		expect(resolveModelMetadata("gpt-5.6-luna").contextWindow).toBe(1_050_000);
+		expect(resolveModelMetadata("gpt-5.6-luna-fast").contextWindow).toBe(1_050_000);
 	});
 
 	test("claude-opus-4-6-thinking follows the live antigravity 200K route", () => {

@@ -119,9 +119,9 @@ fields (e.g. Kimi K3) still tokenize cleanly:
 `supportsStore: false`, `supportsDeveloperRole: false`,
 `maxTokensField: "max_tokens"`, plus reasoning-effort where supported.
 
-GPT-5.6 models use a 1,000,000-token total context budget with a
+GPT-5.6 models use the official 1,050,000-token total context budget with a
 128,000-token output maximum. Senpi reserves that output allowance, leaving
-872,000 tokens for the Pro Codex subscription route's maximum input context.
+922,000 tokens for input.
 
 ---
 

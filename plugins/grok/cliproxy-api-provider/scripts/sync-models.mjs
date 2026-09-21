@@ -159,14 +159,9 @@ function loadCatalog(catalogPath) {
   }
 }
 
-/**
- * Host context-window overrides. Use documented model capability unless the
- * subscription gateway publishes or enforces a lower route limit. GPT-5.6's
- * direct API supports 922K input; the current CLIProxy route exposes 921K.
- */
+/** Host context-window overrides for routes that enforce lower limits. */
 function effectiveContextWindowOverride(mid) {
   const baseMid = gptFastTierBaseId(mid) || mid;
-  if (baseMid.includes("gpt-5.6")) return 921000;
   if (baseMid === "gpt-5.4-mini") return 400000;
   if (baseMid.includes("gpt-5.4") || baseMid.includes("gpt-5.5")) return 272000;
   return null;

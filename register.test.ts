@@ -216,6 +216,56 @@ describe("planRegistration (single cpa provider)", () => {
 		}
 	});
 
+	test("loads OMO config before Senpi and legacy pi config", async () => {
+		const previousHome = process.env.HOME;
+		const previousUrl = process.env.CLIPROXY_URL;
+		const previousKey = process.env.CLIPROXY_API_KEY;
+		const home = await mkdtemp(join(tmpdir(), "cliproxy-omo-first-"));
+		const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ data: [{ id: "grok-4.7", owned_by: "xai" }] }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		const pi = {
+			unregisterProvider: mock(() => undefined),
+			registerProvider: mock(() => undefined),
+			registerCommand: mock(() => undefined),
+			on: mock(() => undefined),
+		};
+
+		try {
+			delete process.env.CLIPROXY_URL;
+			delete process.env.CLIPROXY_API_KEY;
+			process.env.HOME = home;
+			await mkdir(join(home, ".omo"), { recursive: true });
+			await mkdir(join(home, ".senpi", "agent"), { recursive: true });
+			await mkdir(join(home, ".pi", "agent"), { recursive: true });
+			await writeFile(join(home, ".omo", "cliproxy.json"), JSON.stringify({ baseUrl: "http://omo.example", apiKey: "stale-omo-key" }));
+			await writeFile(join(home, ".senpi", "agent", "cliproxy.json"), JSON.stringify({ baseUrl: "http://senpi.example", apiKey: "stale-senpi-key" }));
+			await writeFile(join(home, ".pi", "agent", "cliproxy.json"), JSON.stringify({ baseUrl: "http://pi.example", apiKey: "stale-pi-key" }));
+			await writeFile(join(home, ".omo", "auth.json"), JSON.stringify({ cpa: { type: "api_key", key: "auth-key" } }));
+
+			await Reflect.apply(registerExtension, undefined, [pi]);
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				"http://omo.example/v1/models",
+				expect.objectContaining({
+					headers: expect.objectContaining({ Authorization: "Bearer auth-key" }),
+				}),
+			);
+		} finally {
+			fetchSpy.mockRestore();
+			if (previousHome === undefined) delete process.env.HOME;
+			else process.env.HOME = previousHome;
+			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;
+			else process.env.CLIPROXY_URL = previousUrl;
+			if (previousKey === undefined) delete process.env.CLIPROXY_API_KEY;
+			else process.env.CLIPROXY_API_KEY = previousKey;
+			await rm(home, { recursive: true, force: true });
+		}
+	});
+
 	test("loads Senpi config before legacy pi config", async () => {
 		const previousHome = process.env.HOME;
 		const previousUrl = process.env.CLIPROXY_URL;

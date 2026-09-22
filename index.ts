@@ -12,8 +12,10 @@
  * names cliproxy-openai, cliproxy-gemini and cliproxy are unregistered on
  * refresh so old picker entries vanish.
  *
- * Proxy URL and model overrides come from CLIPROXY_URL or cliproxy.json;
- * credentials come from CLIPROXY_API_KEY or ~/.omo/auth.json (cpa.key).
+ * Proxy URL and model overrides come from CLIPROXY_URL or cliproxy.json
+ * (~/.omo/cliproxy.json first, then ~/.senpi/agent/cliproxy.json, then
+ * ~/.pi/agent/cliproxy.json); credentials come from CLIPROXY_API_KEY or
+ * ~/.omo/auth.json (cpa.key), not from cliproxy.json.
  *
  * A missing API key is tolerated — CLIProxyAPIPlus accepts unauthenticated
  * requests when its own `api-keys:` list is empty. A dummy placeholder key
@@ -148,9 +150,9 @@ function loadConfig(): Config {
 	let gptFastModels: string[] | undefined;
 	const home = process.env.HOME?.trim() || homedir();
 	const configPath = firstExistingPath([
+		join(home, ".omo", "cliproxy.json"),
 		join(home, ".senpi", "agent", "cliproxy.json"),
 		join(home, ".pi", "agent", "cliproxy.json"),
-		join(home, ".omo", "cliproxy.json"),
 	]);
 	if (existsSync(configPath)) {
 		try {
@@ -186,7 +188,7 @@ function loadConfig(): Config {
 	const rawBaseUrl = envUrl || fileBase;
 	if (!rawBaseUrl) {
 		throw new Error(
-			"[cpa] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.senpi/agent/cliproxy.json, ~/.pi/agent/cliproxy.json, or ~/.omo/cliproxy.json",
+			"[cpa] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.omo/cliproxy.json, ~/.senpi/agent/cliproxy.json, or ~/.pi/agent/cliproxy.json",
 		);
 	}
 	// Strip trailing slashes so we can safely append suffixes.
@@ -608,7 +610,8 @@ export function resolveModelMetadata(id: string): ModelMetadata {
  * - Kimi K3: low | high | max (no medium/xhigh)
  * - Grok 4.3 / 4.5 / 4.6 / 4.7: OMO may select only low | medium | high.
  *   xhigh and max stay null so the picker cannot offer them.
- * - Grok 4.20 reasoning / multi-agent: no documented effort list, so do not send one.
+ * - Grok 4.20 reasoning / multi-agent: no documented effort list. Map every
+ *   OMO level to null so the picker stays open and the request sends no effort.
  */
 const GROK_UP_TO_HIGH = {
 	off: null,
@@ -635,6 +638,20 @@ export function thinkingLevelMapFor(id: string): ThinkingLevelMap | undefined {
 	}
 	if (slug === "grok-4.7" || slug === "grok-4.6" || slug === "grok-4.5" || slug === "grok-4.3") {
 		return { ...GROK_UP_TO_HIGH };
+	}
+	if (
+		slug === "grok-4.20-0309-reasoning" ||
+		slug === "grok-4.20-multi-agent-0309"
+	) {
+		return {
+			off: null,
+			minimal: null,
+			low: null,
+			medium: null,
+			high: null,
+			xhigh: null,
+			max: null,
+		};
 	}
 	return undefined;
 }

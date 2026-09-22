@@ -72,9 +72,9 @@ pi -e ./index.ts
 The proxy URL uses the first available source:
 
 1. `CLIPROXY_URL`
-2. `~/.senpi/agent/cliproxy.json`
-3. `~/.pi/agent/cliproxy.json` for legacy pi-agent CLIs
-4. `~/.omo/cliproxy.json`
+2. `~/.omo/cliproxy.json`
+3. `~/.senpi/agent/cliproxy.json`
+4. `~/.pi/agent/cliproxy.json` for legacy pi-agent CLIs
 
 The CPA API key comes from `CLIPROXY_API_KEY` or `~/.omo/auth.json` (`cpa.key`), not from `cliproxy.json`.
 

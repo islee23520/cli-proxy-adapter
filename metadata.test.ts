@@ -110,14 +110,31 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		}
 	});
 
-	test("grok models without a documented effort list do not send high", () => {
-		for (const id of ["grok-4.20-0309-reasoning", "grok-4.20-multi-agent-0309", "grok-build-0.1"]) {
+	test("grok-4.20 reasoning ids keep every OMO effort selectable and send none", () => {
+		const expected = {
+			off: null,
+			minimal: null,
+			low: null,
+			medium: null,
+			high: null,
+			xhigh: null,
+			max: null,
+		};
+		for (const id of ["grok-4.20-0309-reasoning", "grok-4.20-multi-agent-0309"]) {
 			const model = toProviderModel(
 				{ id, owned_by: "xai" },
 				{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
 			);
-			expect(model.thinkingLevelMap).toBeUndefined();
+			expect(model.thinkingLevelMap).toEqual(expected);
 		}
+	});
+
+	test("grok-build-0.1 does not advertise a reasoning effort", () => {
+		const model = toProviderModel(
+			{ id: "grok-build-0.1", owned_by: "xai" },
+			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
+		);
+		expect(model.thinkingLevelMap).toBeUndefined();
 	});
 
 	test("gpt-5.5 uses the observed 272K CLIProxy effective context", () => {

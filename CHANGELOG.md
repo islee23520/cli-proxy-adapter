@@ -1,9 +1,15 @@
 # Changelog
 
+## Unreleased - 2026-09-23
+
+- CPA credentials now come from `CLIPROXY_API_KEY`, else the `cpa` entry in `~/.omo/auth.json`; `cliproxy.json` no longer supplies an API key (upstream `fix/cpa-auth-json-credential`).
+- Synced upstream PR #2: `gptFastModels` allowlist in `cliproxy.json` and the `gpt-6-luna-fast` alias that routes to `gpt-6-luna` with `service_tier: "priority"`.
+
 ## Unreleased - 2026-09-22
 
 - Register `grok-4.7` at the documented 500k context. Grok 4.3, 4.5, 4.6, and 4.7 expose only `low`/`medium`/`high` in the OMO picker; `xhigh` and `max` are not selectable.
-- Set Grok 4.20 context windows to the documented 1M and stop sending an undocumented reasoning effort for those ids.
+- Set Grok 4.20 context windows to the documented 1M. Reasoning and multi-agent ids keep every OMO thinking level selectable and send no reasoning effort.
+- Read `~/.omo/cliproxy.json` before `~/.senpi/agent/cliproxy.json` and `~/.pi/agent/cliproxy.json`.
 
 ## Unreleased - 2026-09-08
 

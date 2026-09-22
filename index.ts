@@ -439,12 +439,13 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"kimi-k3": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 131_072 },
 	"grok-3-mini": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 131_072 },
 	"grok-3-mini-fast": { reasoning: true, input: ["text"], contextWindow: 131_072, maxTokens: 131_072 },
-	"grok-4.20-0309-non-reasoning": { reasoning: false, input: ["text", "image"], contextWindow: 2_000_000, maxTokens: 65_536 },
-	"grok-4.20-0309-reasoning": { reasoning: true, input: ["text", "image"], contextWindow: 2_000_000, maxTokens: 65_536 },
-	"grok-4.20-multi-agent-0309": { reasoning: true, input: ["text", "image"], contextWindow: 2_000_000, maxTokens: 65_536 },
-	"grok-4.3": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 1_000_000 },
-	"grok-4.5": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 500_000 },
-	"grok-4.6": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 500_000 },
+	"grok-4.20-0309-non-reasoning": { reasoning: false, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 65_536 },
+	"grok-4.20-0309-reasoning": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 65_536 },
+	"grok-4.20-multi-agent-0309": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 65_536 },
+	"grok-4.3": { reasoning: true, input: ["text", "image"], contextWindow: 1_000_000, maxTokens: 65_536 },
+	"grok-4.5": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 65_536 },
+	"grok-4.6": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 65_536 },
+	"grok-4.7": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 65_536 },
 	"grok-build-0.1": { reasoning: false, input: ["text", "image"], contextWindow: 256_000, maxTokens: 256_000 },
 	"grok-composer-2.5-fast": { reasoning: false, input: ["text"], contextWindow: 200_000, maxTokens: 32_768 },
 	"grok-imagine-image": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
@@ -526,7 +527,7 @@ function inferLimits(id: string): { contextWindow: number; maxTokens: number } {
 	if (l.includes("gemini-2.5") || l.includes("gemini-3")) return { contextWindow: 1_048_576, maxTokens: 65_536 };
 	if (l.includes("gemini")) return { contextWindow: 1_048_576, maxTokens: 8_192 };
 	if (l.includes("grok-4.20") || l.includes("grok-4.3")) return { contextWindow: 1_000_000, maxTokens: 1_000_000 };
-	if (l.includes("grok-4.5") || l.includes("grok-4.6")) return { contextWindow: 500_000, maxTokens: 500_000 };
+	if (l.includes("grok-4.5") || l.includes("grok-4.6") || l.includes("grok-4.7")) return { contextWindow: 500_000, maxTokens: 65_536 };
 	if (l.includes("grok-build")) return { contextWindow: 256_000, maxTokens: 256_000 };
 	if (l.includes("grok")) return { contextWindow: 131_072, maxTokens: 8_192 };
 	if (l.includes("glm-5.2")) return { contextWindow: 1_000_000, maxTokens: 128_000 };
@@ -584,9 +585,20 @@ export function resolveModelMetadata(id: string): ModelMetadata {
  *
  * Vendor vocabularies:
  * - Kimi K3: low | high | max (no medium/xhigh)
- * - Grok 4.6 / 4.20 reasoning: low | medium | high | xhigh (no max; map max→xhigh)
- * - Grok 4.5 reasoning: low | medium | high (xhigh is 4.6+; map xhigh/max→high)
+ * - Grok 4.3 / 4.5 / 4.6 / 4.7: OMO may select only low | medium | high.
+ *   xhigh and max stay null so the picker cannot offer them.
+ * - Grok 4.20 reasoning / multi-agent: no documented effort list, so do not send one.
  */
+const GROK_UP_TO_HIGH = {
+	off: null,
+	minimal: "low",
+	low: "low",
+	medium: "medium",
+	high: "high",
+	xhigh: null,
+	max: null,
+} as const;
+
 export function thinkingLevelMapFor(id: string): ThinkingLevelMap | undefined {
 	const slug = id.toLowerCase().includes("/") ? id.toLowerCase().split("/").pop()! : id.toLowerCase();
 	if (slug === "kimi-k3") {
@@ -600,31 +612,8 @@ export function thinkingLevelMapFor(id: string): ThinkingLevelMap | undefined {
 			max: "max",
 		};
 	}
-	if (
-		slug === "grok-4.6" ||
-		slug === "grok-4.20-0309-reasoning" ||
-		slug === "grok-4.20-multi-agent-0309"
-	) {
-		return {
-			off: null,
-			minimal: "low",
-			low: "low",
-			medium: "medium",
-			high: "high",
-			xhigh: "xhigh",
-			max: "xhigh",
-		};
-	}
-	if (slug === "grok-4.5") {
-		return {
-			off: null,
-			minimal: "low",
-			low: "low",
-			medium: "medium",
-			high: "high",
-			xhigh: "high",
-			max: "high",
-		};
+	if (slug === "grok-4.7" || slug === "grok-4.6" || slug === "grok-4.5" || slug === "grok-4.3") {
+		return { ...GROK_UP_TO_HIGH };
 	}
 	return undefined;
 }
@@ -673,6 +662,7 @@ function fallbackModels(): CLIProxyListModel[] {
 		{ id: "gpt-5.6-sol-fast", owned_by: "openai" },
 		{ id: "gpt-4o", owned_by: "openai" },
 		{ id: "gpt-4o-mini", owned_by: "openai" },
+		{ id: "grok-4.7", owned_by: "xai" },
 		{ id: "grok-4.6", owned_by: "xai" },
 		{ id: "grok-4.5", owned_by: "xai" },
 		{ id: "grok-4.3", owned_by: "xai" },

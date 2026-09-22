@@ -7,7 +7,7 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.reasoning).toBe(true);
 		expect(m.input).toEqual(["text", "image"]);
 		expect(m.contextWindow).toBe(500_000);
-		expect(m.maxTokens).toBe(500_000);
+		expect(m.maxTokens).toBe(65_536);
 	});
 
 	test("grok-4.6 matches xAI docs: reasoning, image, 500k", () => {
@@ -15,7 +15,15 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.reasoning).toBe(true);
 		expect(m.input).toEqual(["text", "image"]);
 		expect(m.contextWindow).toBe(500_000);
-		expect(m.maxTokens).toBe(500_000);
+		expect(m.maxTokens).toBe(65_536);
+	});
+
+	test("grok-4.7 matches grok-4.6: reasoning, image, 500k", () => {
+		const m = resolveModelMetadata("grok-4.7");
+		expect(m.reasoning).toBe(true);
+		expect(m.input).toEqual(["text", "image"]);
+		expect(m.contextWindow).toBe(500_000);
+		expect(m.maxTokens).toBe(65_536);
 	});
 
 	test("unknown id falls back to infer* without throwing", () => {
@@ -30,7 +38,7 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.reasoning).toBe(true);
 		expect(m.input).toEqual(["text", "image"]);
 		expect(m.contextWindow).toBe(1_000_000);
-		expect(m.maxTokens).toBe(1_000_000);
+		expect(m.maxTokens).toBe(65_536);
 	});
 
 	test("glm-5.2: 1M context, reasoning, text-only from table", () => {
@@ -83,38 +91,33 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		});
 	});
 
-	test("grok-4.5 maps session max/xhigh thinking to wire high", () => {
-		const model = toProviderModel(
-			{ id: "grok-4.5", owned_by: "xai" },
-			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
-		);
-		// xhigh is grok-4.6+; grok-4.5 treats xhigh as high.
-		expect(model.thinkingLevelMap).toEqual({
+	test("grok models that accept high keep high as their maximum OMO effort", () => {
+		const expected = {
 			off: null,
 			minimal: "low",
 			low: "low",
 			medium: "medium",
 			high: "high",
-			xhigh: "high",
-			max: "high",
-		});
+			xhigh: null,
+			max: null,
+		};
+		for (const id of ["grok-4.7", "grok-4.6", "grok-4.5", "grok-4.3"]) {
+			const model = toProviderModel(
+				{ id, owned_by: "xai" },
+				{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
+			);
+			expect(model.thinkingLevelMap).toEqual(expected);
+		}
 	});
 
-	test("grok-4.6 maps session max thinking to wire xhigh", () => {
-		const model = toProviderModel(
-			{ id: "grok-4.6", owned_by: "xai" },
-			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
-		);
-		// Grok 4.6 has no `max` effort; Senpi defaultThinkingLevel=max must become xhigh.
-		expect(model.thinkingLevelMap).toEqual({
-			off: null,
-			minimal: "low",
-			low: "low",
-			medium: "medium",
-			high: "high",
-			xhigh: "xhigh",
-			max: "xhigh",
-		});
+	test("grok models without a documented effort list do not send high", () => {
+		for (const id of ["grok-4.20-0309-reasoning", "grok-4.20-multi-agent-0309", "grok-build-0.1"]) {
+			const model = toProviderModel(
+				{ id, owned_by: "xai" },
+				{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
+			);
+			expect(model.thinkingLevelMap).toBeUndefined();
+		}
 	});
 
 	test("gpt-5.5 uses the observed 272K CLIProxy effective context", () => {
@@ -157,21 +160,21 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(resolveModelMetadata("gpt-5.4-fast").contextWindow).toBe(1_050_000);
 	});
 
-	test("grok-4.20-0309-reasoning uses the live 2M route", () => {
+	test("grok-4.20-0309-reasoning uses the documented 1M window", () => {
 		const m = resolveModelMetadata("grok-4.20-0309-reasoning");
-		expect(m.contextWindow).toBe(2_000_000);
+		expect(m.contextWindow).toBe(1_000_000);
 		expect(m.maxTokens).toBe(65_536);
 	});
 
-	test("grok-4.20-multi-agent-0309 uses the live 2M route", () => {
+	test("grok-4.20-multi-agent-0309 uses the documented 1M window", () => {
 		const m = resolveModelMetadata("grok-4.20-multi-agent-0309");
-		expect(m.contextWindow).toBe(2_000_000);
+		expect(m.contextWindow).toBe(1_000_000);
 		expect(m.maxTokens).toBe(65_536);
 	});
 
-	test("grok-4.20-0309-non-reasoning uses the live 2M route", () => {
+	test("grok-4.20-0309-non-reasoning uses the documented 1M window", () => {
 		const m = resolveModelMetadata("grok-4.20-0309-non-reasoning");
-		expect(m.contextWindow).toBe(2_000_000);
+		expect(m.contextWindow).toBe(1_000_000);
 		expect(m.maxTokens).toBe(65_536);
 	});
 
@@ -218,7 +221,7 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 	test("provider registration preserves context windows above 850K", () => {
 		for (const [id, contextWindow] of [
 			["gpt-6-astra", 1_050_000],
-			["grok-4.20-0309-reasoning", 2_000_000],
+			["grok-4.20-0309-reasoning", 1_000_000],
 			["kimi-k3", 1_048_576],
 			["totally-unknown-claude-model", 1_000_000],
 		] as const) {

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased - 2026-09-22
+
+- Register `grok-4.7` at the documented 500k context. Grok 4.3, 4.5, 4.6, and 4.7 expose only `low`/`medium`/`high` in the OMO picker; `xhigh` and `max` are not selectable.
+- Set Grok 4.20 context windows to the documented 1M and stop sending an undocumented reasoning effort for those ids.
+
 ## Unreleased - 2026-09-08
 
 - Align GPT-5.6 Luna, Sol, Terra, and fast variants with OpenAI's official 1,050,000-token context window and 128,000-token output limit across pi and Grok-family hosts.

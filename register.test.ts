@@ -240,8 +240,10 @@ describe("planRegistration (single cpa provider)", () => {
 			process.env.HOME = home;
 			await mkdir(join(home, ".senpi", "agent"), { recursive: true });
 			await mkdir(join(home, ".pi", "agent"), { recursive: true });
-			await writeFile(join(home, ".senpi", "agent", "cliproxy.json"), JSON.stringify({ baseUrl: "http://senpi.example", apiKey: "senpi-key" }));
-			await writeFile(join(home, ".pi", "agent", "cliproxy.json"), JSON.stringify({ baseUrl: "http://pi.example", apiKey: "pi-key" }));
+			await writeFile(join(home, ".senpi", "agent", "cliproxy.json"), JSON.stringify({ baseUrl: "http://senpi.example" }));
+			await writeFile(join(home, ".pi", "agent", "cliproxy.json"), JSON.stringify({ baseUrl: "http://pi.example" }));
+			await mkdir(join(home, ".omo"), { recursive: true });
+			await writeFile(join(home, ".omo", "auth.json"), JSON.stringify({ cpa: { type: "api_key", key: "senpi-key" } }));
 
 			await Reflect.apply(registerExtension, undefined, [pi]);
 
@@ -263,7 +265,7 @@ describe("planRegistration (single cpa provider)", () => {
 		}
 	});
 
-	test("loads OMO config and pins image generation when Senpi and pi configs are absent", async () => {
+	test("loads CPA key from OMO auth.json instead of cliproxy.json", async () => {
 		const previousHome = process.env.HOME;
 		const previousUrl = process.env.CLIPROXY_URL;
 		const previousKey = process.env.CLIPROXY_API_KEY;
@@ -290,8 +292,9 @@ describe("planRegistration (single cpa provider)", () => {
 			await mkdir(join(home, ".omo"), { recursive: true });
 			await writeFile(
 				join(home, ".omo", "cliproxy.json"),
-				JSON.stringify({ baseUrl: "http://omo.example", apiKey: "omo-key" }),
+				JSON.stringify({ baseUrl: "http://omo.example", apiKey: "stale-key" }),
 			);
+			await writeFile(join(home, ".omo", "auth.json"), JSON.stringify({ cpa: { type: "api_key", key: "omo-key" } }));
 
 			await Reflect.apply(registerExtension, undefined, [pi]);
 

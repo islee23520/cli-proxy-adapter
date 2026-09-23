@@ -12,9 +12,8 @@
  * names cliproxy-openai, cliproxy-gemini and cliproxy are unregistered on
  * refresh so old picker entries vanish.
  *
- * Config is read from env vars (CLIPROXY_URL, CLIPROXY_API_KEY) first, then
- * ~/.senpi/agent/cliproxy.json, ~/.pi/agent/cliproxy.json, then
- * ~/.omo/cliproxy.json ({ "baseUrl": "...", "apiKey": "..." }).
+ * Proxy URL and model overrides come from CLIPROXY_URL or cliproxy.json;
+ * credentials come from CLIPROXY_API_KEY or ~/.omo/auth.json (cpa.key).
  *
  * A missing API key is tolerated — CLIProxyAPIPlus accepts unauthenticated
  * requests when its own `api-keys:` list is empty. A dummy placeholder key
@@ -143,7 +142,7 @@ function loadConfig(): Config {
 	const envKey = process.env.CLIPROXY_API_KEY?.trim();
 
 	let fileBase: string | undefined;
-	let fileKey: string | undefined;
+	let authKey: string | undefined;
 	let fileContextOverrides: Record<string, number> = {};
 	let fileMaxTokensOverrides: Record<string, number> = {};
 	let gptFastModels: string[] | undefined;
@@ -157,13 +156,11 @@ function loadConfig(): Config {
 		try {
 			const parsed = JSON.parse(readFileSync(configPath, "utf-8")) as {
 				baseUrl?: string;
-				apiKey?: string;
 				contextOverrides?: Record<string, number>;
 				maxTokensOverrides?: Record<string, number>;
 				gptFastModels?: string[];
 			};
 			fileBase = parsed.baseUrl?.trim();
-			fileKey = parsed.apiKey?.trim();
 			if (Array.isArray(parsed.gptFastModels)) gptFastModels = parsed.gptFastModels;
 			if (parsed.contextOverrides && typeof parsed.contextOverrides === "object") {
 				fileContextOverrides = parsed.contextOverrides;
@@ -173,6 +170,15 @@ function loadConfig(): Config {
 			}
 		} catch (err) {
 			console.warn(`[cpa] Failed to parse ${configPath}: ${(err as Error).message}`);
+		}
+	}
+	const authPath = join(home, ".omo", "auth.json");
+	if (existsSync(authPath)) {
+		try {
+			const auth = JSON.parse(readFileSync(authPath, "utf-8")) as { cpa?: { type?: string; key?: string } };
+			if (auth.cpa?.type === "api_key") authKey = auth.cpa.key?.trim();
+		} catch (err) {
+			console.warn(`[cpa] Failed to parse ${authPath}: ${(err as Error).message}`);
 		}
 	}
 
@@ -186,7 +192,7 @@ function loadConfig(): Config {
 	// Strip trailing slashes so we can safely append suffixes.
 	const baseUrl = rawBaseUrl.replace(/\/+$/, "");
 
-	const apiKey = envKey ?? fileKey ?? "";
+	const apiKey = envKey ?? authKey ?? "";
 
 	// Env-var overrides for quick one-off tweaks:
 	//   CLIPROXY_CONTEXT_OVERRIDES="claude-opus-4-5=1000000,claude-sonnet-4-5=1000000"

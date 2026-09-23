@@ -69,11 +69,14 @@ pi -e ./index.ts
 
 ### 2. Configure the proxy URL
 
-First match wins:
+The proxy URL uses the first available source:
 
-1. `CLIPROXY_URL` / `CLIPROXY_API_KEY`
+1. `CLIPROXY_URL`
 2. `~/.senpi/agent/cliproxy.json`
 3. `~/.pi/agent/cliproxy.json` for legacy pi-agent CLIs
+4. `~/.omo/cliproxy.json`
+
+The CPA API key comes from `CLIPROXY_API_KEY` or `~/.omo/auth.json` (`cpa.key`), not from `cliproxy.json`.
 
 Env:
 
@@ -86,9 +89,14 @@ Or file (`~/.senpi/agent/cliproxy.json`):
 
 ```json
 {
-  "baseUrl": "https://your-proxy.example.com",
-  "apiKey": "your-key"
+  "baseUrl": "https://your-proxy.example.com"
 }
+```
+
+For an authenticated proxy, configure `~/.omo/auth.json` with a CPA entry:
+
+```json
+{ "cpa": { "type": "api_key", "key": "your-key" } }
 ```
 
 Missing API key is tolerated (placeholder is sent). If the proxy’s

@@ -123,6 +123,19 @@ GPT-5.6 models use the official 1,050,000-token total context budget with a
 128,000-token output maximum. Senpi reserves that output allowance, leaving
 922,000 tokens for input.
 
+To restrict which GPT fast models appear under `cpa`, set `gptFastModels` in
+the same `cliproxy.json` file. Omit it to expose every fast id returned by the
+proxy; use `[]` to hide all GPT fast models. Non-GPT models are unaffected.
+When the proxy exposes `gpt-6-luna`, the adapter can also expose
+`gpt-6-luna-fast` as an alias that sends `service_tier: "priority"` to Luna.
+This controls the adapter's model list, not the proxy's own `/v1/models` list.
+
+```json
+{
+  "gptFastModels": ["gpt-5.6-luna-fast", "gpt-5.6-terra-fast", "gpt-6-luna-fast"]
+}
+```
+
 ---
 
 ## Install for Grokomo / GrokBuild CLI variants

@@ -40,6 +40,8 @@ interface CLIProxyListModel {
 interface Config {
 	baseUrl: string;
 	apiKey: string; // may be "" if user hasn't set one
+	// Omit to expose all GPT fast ids; [] blocks all; otherwise allow listed ids.
+	gptFastModels?: string[];
 	// Per-model context-window overrides, e.g. { "claude-opus-4-5": 1000000 }.
 	// Useful when the proxy doesn't encode long-context variants in the id.
 	contextOverrides: Record<string, number>;
@@ -102,15 +104,24 @@ export interface RegistrationPlan {
 	modelIds: string[];
 }
 
-export function planRegistration(rawModels: CLIProxyListModel[]): RegistrationPlan {
+export function planRegistration(rawModels: CLIProxyListModel[], gptFastModels?: readonly string[]): RegistrationPlan {
 	return {
 		providerName: PROVIDER.providerName,
 		api: PROVIDER.api,
 		baseSuffix: PROVIDER.baseSuffix,
 		compat: PROVIDER.compat,
 		legacyProviders: LEGACY_PROVIDERS,
-		modelIds: rawModels.map((m) => m.id),
+		modelIds: modelsForRegistration(rawModels, gptFastModels).map((m) => m.id),
 	};
+}
+
+function modelsForRegistration(rawModels: CLIProxyListModel[], gptFastModels?: readonly string[]): CLIProxyListModel[] {
+	const allowed = (id: string) => gptFastModels === undefined || gptFastModels.includes(id);
+	const models = rawModels.filter((m) => !m.id.startsWith("gpt-") || !m.id.endsWith("-fast") || allowed(m.id));
+	if (allowed("gpt-6-luna-fast") && models.some((m) => m.id === "gpt-6-luna") && !models.some((m) => m.id === "gpt-6-luna-fast")) {
+		models.push({ id: "gpt-6-luna-fast", owned_by: "openai" });
+	}
+	return models;
 }
 
 // pi's validation requires a non-empty apiKey when `models` is set. When the
@@ -135,6 +146,7 @@ function loadConfig(): Config {
 	let fileKey: string | undefined;
 	let fileContextOverrides: Record<string, number> = {};
 	let fileMaxTokensOverrides: Record<string, number> = {};
+	let gptFastModels: string[] | undefined;
 	const home = process.env.HOME?.trim() || homedir();
 	const configPath = firstExistingPath([
 		join(home, ".senpi", "agent", "cliproxy.json"),
@@ -148,9 +160,11 @@ function loadConfig(): Config {
 				apiKey?: string;
 				contextOverrides?: Record<string, number>;
 				maxTokensOverrides?: Record<string, number>;
+				gptFastModels?: string[];
 			};
 			fileBase = parsed.baseUrl?.trim();
 			fileKey = parsed.apiKey?.trim();
+			if (Array.isArray(parsed.gptFastModels)) gptFastModels = parsed.gptFastModels;
 			if (parsed.contextOverrides && typeof parsed.contextOverrides === "object") {
 				fileContextOverrides = parsed.contextOverrides;
 			}
@@ -179,7 +193,7 @@ function loadConfig(): Config {
 	const contextOverrides = { ...fileContextOverrides, ...parseOverrides(process.env.CLIPROXY_CONTEXT_OVERRIDES) };
 	const maxTokensOverrides = { ...fileMaxTokensOverrides, ...parseOverrides(process.env.CLIPROXY_MAX_TOKENS_OVERRIDES) };
 
-	return { baseUrl, apiKey, contextOverrides, maxTokensOverrides };
+	return { baseUrl, apiKey, contextOverrides, maxTokensOverrides, gptFastModels };
 }
 
 function firstExistingPath(paths: readonly string[]): string {
@@ -460,6 +474,7 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"gpt-5.6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-6-astra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 114_000, maxTokens: 32_768 },
 	"gpt-image-1.5": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
@@ -660,6 +675,7 @@ function fallbackModels(): CLIProxyListModel[] {
 		{ id: "gpt-5-codex", owned_by: "openai" },
 		{ id: "gpt-5.6-sol", owned_by: "openai" },
 		{ id: "gpt-5.6-sol-fast", owned_by: "openai" },
+		{ id: "gpt-6-luna", owned_by: "openai" },
 		{ id: "gpt-4o", owned_by: "openai" },
 		{ id: "gpt-4o-mini", owned_by: "openai" },
 		{ id: "grok-4.7", owned_by: "xai" },
@@ -678,8 +694,8 @@ function fallbackModels(): CLIProxyListModel[] {
 // ---------------------------------------------------------------------------
 
 function registerFamilies(pi: ExtensionAPI, cfg: Config, rawModels: CLIProxyListModel[]): number {
-	const plan = planRegistration(rawModels);
-	const models = rawModels.map((m) => toProviderModel(m, cfg));
+	const plan = planRegistration(rawModels, cfg.gptFastModels);
+	const models = modelsForRegistration(rawModels, cfg.gptFastModels).map((m) => toProviderModel(m, cfg));
 
 	// Drop legacy multi-family provider names so the picker only shows cpa/*.
 	for (const name of plan.legacyProviders) {
@@ -832,6 +848,10 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		const model = requestModel(event) ?? ctx.model;
 		if (model?.provider !== PROVIDER.providerName) return;
 		const modelId = model.id.toLowerCase();
+		if (modelId === "gpt-6-luna-fast") {
+			const payload = normalizeToolParameterTypes(event.payload) as Record<string, unknown>;
+			return { ...payload, model: "gpt-6-luna", service_tier: "priority" };
+		}
 		if (modelId.startsWith("kimi-") || modelId.startsWith("moonshot-")) {
 			return normalizeKimiToolParameterTypes(event.payload);
 		}

@@ -78,6 +78,54 @@ describe("normalizeKimiToolParameterTypes", () => {
 });
 
 describe("planRegistration (single cpa provider)", () => {
+	test("GPT fast allowlist can expose all, none, or only selected models", () => {
+		const rawModels = [
+			{ id: "gpt-5.6-sol-fast" }, { id: "gpt-5.4-mini-fast" }, { id: "gpt-6-astra-fast" },
+			{ id: "gpt-5.6-luna-fast" }, { id: "gpt-5.6-terra-fast" }, { id: "gpt-6-luna" },
+			{ id: "grok-3-mini-fast" },
+		];
+		expect(planRegistration(rawModels).modelIds).toEqual([...rawModels.map((m) => m.id), "gpt-6-luna-fast"]);
+		expect(planRegistration(rawModels, []).modelIds).toEqual(["gpt-6-luna", "grok-3-mini-fast"]);
+		expect(planRegistration(rawModels, ["gpt-5.6-luna-fast", "gpt-5.6-terra-fast", "gpt-6-luna-fast"]).modelIds)
+			.toEqual(["gpt-5.6-luna-fast", "gpt-5.6-terra-fast", "gpt-6-luna", "grok-3-mini-fast", "gpt-6-luna-fast"]);
+	});
+
+	test("registers GPT-6 Luna Fast and routes it to Luna with priority tier", async () => {
+		const previousUrl = process.env.CLIPROXY_URL;
+		process.env.CLIPROXY_URL = "http://cliproxy.example";
+		const previousHome = process.env.HOME;
+		const home = await mkdtemp(join(tmpdir(), "cliproxy-fast-policy-"));
+		const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [
+			{ id: "gpt-6-luna", owned_by: "openai" }, { id: "gpt-5.6-sol-fast", owned_by: "openai" },
+		] }), { status: 200, headers: { "content-type": "application/json" } }));
+		const registerProvider = mock(() => undefined);
+		const handlers = new Map<string, (...args: any[]) => unknown>();
+		const pi = {
+			unregisterProvider: mock(() => undefined), registerProvider,
+			registerCommand: mock(() => undefined),
+			on: mock((name: string, handler: (...args: any[]) => unknown) => handlers.set(name, handler)),
+		};
+		try {
+			process.env.HOME = home;
+			await mkdir(join(home, ".omo"), { recursive: true });
+			await writeFile(join(home, ".omo", "cliproxy.json"), JSON.stringify({ gptFastModels: ["gpt-6-luna-fast"] }));
+			await Reflect.apply(registerExtension, undefined, [pi]);
+			const models = registerProvider.mock.calls[0]?.[1]?.models;
+			expect(models.map((model: { id: string }) => model.id)).toEqual(["gpt-6-luna", "gpt-6-luna-fast"]);
+			expect(models[1]).toMatchObject({ reasoning: true, input: ["text", "image"], contextWindow: 1_050_000 });
+			const payload = { model: "gpt-6-luna-fast", tools: [{ type: "function", function: { name: "ping", parameters: {} } }] };
+			expect(handlers.get("before_provider_request")?.({ payload, model: { provider: "cpa", id: "gpt-6-luna-fast" } }, {}))
+				.toEqual({ model: "gpt-6-luna", service_tier: "priority", tools: [{ type: "function", function: { name: "ping", parameters: { type: "object" } } }] });
+		} finally {
+			fetchSpy.mockRestore();
+			if (previousHome === undefined) delete process.env.HOME;
+			else process.env.HOME = previousHome;
+			await rm(home, { recursive: true, force: true });
+			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;
+			else process.env.CLIPROXY_URL = previousUrl;
+		}
+	});
+
 	test("puts every model under cliproxy with openai-completions + /v1", () => {
 		const plan = planRegistration([
 			{ id: "claude-sonnet-4-5", owned_by: "anthropic" },
@@ -133,7 +181,10 @@ describe("planRegistration (single cpa provider)", () => {
 
 	test("proxy failure during extension load does not write before Senpi owns the output surface", async () => {
 		const previousUrl = process.env.CLIPROXY_URL;
+		const previousHome = process.env.HOME;
+		const home = await mkdtemp(join(tmpdir(), "cliproxy-fallback-"));
 		process.env.CLIPROXY_URL = "http://127.0.0.1:1";
+		process.env.HOME = home;
 		const fetchSpy = spyOn(globalThis, "fetch").mockRejectedValue(new Error("proxy offline"));
 		const warnSpy = spyOn(console, "warn").mockImplementation(() => undefined);
 		const registerProvider = mock(() => undefined);
@@ -151,11 +202,15 @@ describe("planRegistration (single cpa provider)", () => {
 			expect(warnSpy).not.toHaveBeenCalled();
 			expect(registerProvider).toHaveBeenCalledTimes(1);
 			const registration = registerProvider.mock.calls[0]?.[1];
+			expect(registration?.models.map((model: { id: string }) => model.id)).toContain("gpt-6-luna-fast");
 			expect(registration?.models.map((model: { id: string }) => model.id)).toContain("gpt-5.6-sol-fast");
 			expect(on).toHaveBeenCalledWith("session_start", expect.any(Function));
 		} finally {
 			fetchSpy.mockRestore();
 			warnSpy.mockRestore();
+			if (previousHome === undefined) delete process.env.HOME;
+			else process.env.HOME = previousHome;
+			await rm(home, { recursive: true, force: true });
 			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;
 			else process.env.CLIPROXY_URL = previousUrl;
 		}

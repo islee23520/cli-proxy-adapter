@@ -76,7 +76,19 @@ The proxy URL uses the first available source:
 3. `~/.senpi/agent/cliproxy.json`
 4. `~/.pi/agent/cliproxy.json` for legacy pi-agent CLIs
 
-The CPA API key comes from `CLIPROXY_API_KEY` or `~/.omo/auth.json` (`cpa.key`), not from `cliproxy.json`.
+The CPA API key comes from `CLIPROXY_API_KEY` or `~/.omo/auth.json`, not from
+`cliproxy.json`. The `cpa` entry may be either shape:
+
+```json
+{ "cpa": { "type": "api_key", "key": "your-key" } }
+```
+
+```json
+{ "cpa": { "type": "oauth", "access": "your-token" } }
+```
+
+An `oauth` entry's `access` token is sent as the Bearer credential; OMO owns
+its lifecycle (refresh rotates `access` in `auth.json`).
 
 Env:
 

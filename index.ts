@@ -15,7 +15,7 @@
  * Proxy URL and model overrides come from CLIPROXY_URL or cliproxy.json
  * (~/.omo/cliproxy.json first, then ~/.senpi/agent/cliproxy.json, then
  * ~/.pi/agent/cliproxy.json); credentials come from CLIPROXY_API_KEY or
- * ~/.omo/auth.json (cpa.key), not from cliproxy.json.
+ * ~/.omo/auth.json (cpa api_key.key or oauth.access), not from cliproxy.json.
  *
  * A missing API key is tolerated — CLIProxyAPIPlus accepts unauthenticated
  * requests when its own `api-keys:` list is empty. A dummy placeholder key
@@ -177,8 +177,12 @@ function loadConfig(): Config {
 	const authPath = join(home, ".omo", "auth.json");
 	if (existsSync(authPath)) {
 		try {
-			const auth = JSON.parse(readFileSync(authPath, "utf-8")) as { cpa?: { type?: string; key?: string } };
+			const auth = JSON.parse(readFileSync(authPath, "utf-8")) as {
+				cpa?: { type?: string; key?: string; access?: string };
+			};
+			// api_key: static proxy key. oauth: OMO-managed access token sent as Bearer.
 			if (auth.cpa?.type === "api_key") authKey = auth.cpa.key?.trim();
+			else if (auth.cpa?.type === "oauth") authKey = auth.cpa.access?.trim();
 		} catch (err) {
 			console.warn(`[cpa] Failed to parse ${authPath}: ${(err as Error).message}`);
 		}

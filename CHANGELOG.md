@@ -2,7 +2,7 @@
 
 ## Unreleased - 2026-09-23
 
-- CPA credentials now come from `CLIPROXY_API_KEY`, else the `cpa` entry in `~/.omo/auth.json`; `cliproxy.json` no longer supplies an API key (upstream `fix/cpa-auth-json-credential`).
+- CPA credentials now come from `CLIPROXY_API_KEY`, else the `cpa` entry in `~/.omo/auth.json`; `cliproxy.json` no longer supplies an API key (upstream `fix/cpa-auth-json-credential`). Both entry shapes work: `api_key` (`key`) and `oauth` (`access` sent as Bearer).
 - Synced upstream PR #2: `gptFastModels` allowlist in `cliproxy.json` and the `gpt-6-luna-fast` alias that routes to `gpt-6-luna` with `service_tier: "priority"`.
 
 ## Unreleased - 2026-09-22

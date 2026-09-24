@@ -26,6 +26,35 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.maxTokens).toBe(65_536);
 	});
 
+	test("live 2026-09-24 ids have explicit windows", () => {
+		expect(resolveModelMetadata("gpt-6-sol")).toMatchObject({
+			reasoning: true,
+			input: ["text", "image"],
+			contextWindow: 1_050_000,
+			maxTokens: 128_000,
+		});
+		expect(resolveModelMetadata("grok-4.7-build-fast")).toMatchObject({
+			reasoning: false,
+			input: ["text", "image"],
+			contextWindow: 500_000,
+			maxTokens: 65_536,
+		});
+		expect(resolveModelMetadata("grok-imagine-video-1.5")).toMatchObject({
+			reasoning: false,
+			input: ["text"],
+			contextWindow: 128_000,
+			maxTokens: 8_192,
+		});
+		for (const id of ["gemini-3.5-flash-lite", "gemini-3.6-flash-high", "gemini-3.7-flash-high", "gemini-3.8-flash-high"]) {
+			expect(resolveModelMetadata(id)).toMatchObject({
+				reasoning: true,
+				input: ["text", "image"],
+				contextWindow: 1_048_576,
+				maxTokens: 65_536,
+			});
+		}
+	});
+
 	test("unknown id falls back to infer* without throwing", () => {
 		const m = resolveModelMetadata("totally-unknown-model-xyz");
 		expect(m.contextWindow).toBeGreaterThan(0);
@@ -110,14 +139,31 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		}
 	});
 
-	test("grok models without a documented effort list do not send high", () => {
-		for (const id of ["grok-4.20-0309-reasoning", "grok-4.20-multi-agent-0309", "grok-build-0.1"]) {
+	test("grok-4.20 reasoning ids keep every OMO effort selectable and send none", () => {
+		const expected = {
+			off: null,
+			minimal: null,
+			low: null,
+			medium: null,
+			high: null,
+			xhigh: null,
+			max: null,
+		};
+		for (const id of ["grok-4.20-0309-reasoning", "grok-4.20-multi-agent-0309"]) {
 			const model = toProviderModel(
 				{ id, owned_by: "xai" },
 				{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
 			);
-			expect(model.thinkingLevelMap).toBeUndefined();
+			expect(model.thinkingLevelMap).toEqual(expected);
 		}
+	});
+
+	test("grok-build-0.1 does not advertise a reasoning effort", () => {
+		const model = toProviderModel(
+			{ id: "grok-build-0.1", owned_by: "xai" },
+			{ baseUrl: "http://x", apiKey: "k", contextOverrides: {}, maxTokensOverrides: {} },
+		);
+		expect(model.thinkingLevelMap).toBeUndefined();
 	});
 
 	test("gpt-5.5 uses the observed 272K CLIProxy effective context", () => {

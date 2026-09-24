@@ -12,8 +12,10 @@
  * names cliproxy-openai, cliproxy-gemini and cliproxy are unregistered on
  * refresh so old picker entries vanish.
  *
- * Proxy URL and model overrides come from CLIPROXY_URL or cliproxy.json;
- * credentials come from CLIPROXY_API_KEY or ~/.omo/auth.json (cpa.key).
+ * Proxy URL and model overrides come from CLIPROXY_URL or cliproxy.json
+ * (~/.omo/cliproxy.json first, then ~/.senpi/agent/cliproxy.json, then
+ * ~/.pi/agent/cliproxy.json); credentials come from CLIPROXY_API_KEY or
+ * ~/.omo/auth.json (cpa api_key.key or oauth.access), not from cliproxy.json.
  *
  * A missing API key is tolerated — CLIProxyAPIPlus accepts unauthenticated
  * requests when its own `api-keys:` list is empty. A dummy placeholder key
@@ -148,9 +150,9 @@ function loadConfig(): Config {
 	let gptFastModels: string[] | undefined;
 	const home = process.env.HOME?.trim() || homedir();
 	const configPath = firstExistingPath([
+		join(home, ".omo", "cliproxy.json"),
 		join(home, ".senpi", "agent", "cliproxy.json"),
 		join(home, ".pi", "agent", "cliproxy.json"),
-		join(home, ".omo", "cliproxy.json"),
 	]);
 	if (existsSync(configPath)) {
 		try {
@@ -175,8 +177,12 @@ function loadConfig(): Config {
 	const authPath = join(home, ".omo", "auth.json");
 	if (existsSync(authPath)) {
 		try {
-			const auth = JSON.parse(readFileSync(authPath, "utf-8")) as { cpa?: { type?: string; key?: string } };
+			const auth = JSON.parse(readFileSync(authPath, "utf-8")) as {
+				cpa?: { type?: string; key?: string; access?: string };
+			};
+			// api_key: static proxy key. oauth: OMO-managed access token sent as Bearer.
 			if (auth.cpa?.type === "api_key") authKey = auth.cpa.key?.trim();
+			else if (auth.cpa?.type === "oauth") authKey = auth.cpa.access?.trim();
 		} catch (err) {
 			console.warn(`[cpa] Failed to parse ${authPath}: ${(err as Error).message}`);
 		}
@@ -186,7 +192,7 @@ function loadConfig(): Config {
 	const rawBaseUrl = envUrl || fileBase;
 	if (!rawBaseUrl) {
 		throw new Error(
-			"[cpa] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.senpi/agent/cliproxy.json, ~/.pi/agent/cliproxy.json, or ~/.omo/cliproxy.json",
+			"[cpa] baseUrl not set. Set CLIPROXY_URL env var or baseUrl in ~/.omo/cliproxy.json, ~/.senpi/agent/cliproxy.json, or ~/.pi/agent/cliproxy.json",
 		);
 	}
 	// Strip trailing slashes so we can safely append suffixes.
@@ -448,7 +454,11 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"gemini-3.1-flash-lite": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-3.1-pro-low": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-3.5-flash-extra-low": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
+	"gemini-3.5-flash-lite": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-3.5-flash-low": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
+	"gemini-3.6-flash-high": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
+	"gemini-3.7-flash-high": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
+	"gemini-3.8-flash-high": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"gemini-pro-agent": { reasoning: true, input: ["text", "image"], contextWindow: 1_048_576, maxTokens: 65_536 },
 	"kimi-k2": { reasoning: false, input: ["text"], contextWindow: 131_072, maxTokens: 16_384 },
 	"kimi-k2-thinking": { reasoning: true, input: ["text"], contextWindow: 262_144, maxTokens: 262_144 },
@@ -466,11 +476,13 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"grok-4.5": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 65_536 },
 	"grok-4.6": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 65_536 },
 	"grok-4.7": { reasoning: true, input: ["text", "image"], contextWindow: 500_000, maxTokens: 65_536 },
+	"grok-4.7-build-fast": { reasoning: false, input: ["text", "image"], contextWindow: 500_000, maxTokens: 65_536 },
 	"grok-build-0.1": { reasoning: false, input: ["text", "image"], contextWindow: 256_000, maxTokens: 256_000 },
 	"grok-composer-2.5-fast": { reasoning: false, input: ["text"], contextWindow: 200_000, maxTokens: 32_768 },
 	"grok-imagine-image": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"grok-imagine-image-quality": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"grok-imagine-video": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
+	"grok-imagine-video-1.5": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"grok-imagine-video-1.5-preview": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
 	"codex-auto-review": { reasoning: true, input: ["text"], contextWindow: 272_000, maxTokens: 128_000 },
 	"gpt-5.3-codex-spark": { reasoning: true, input: ["text"], contextWindow: 128_000, maxTokens: 32_000 },
@@ -481,6 +493,7 @@ const MODEL_METADATA: Record<string, ModelMetadata> = {
 	"gpt-5.6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-5.6-terra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-6-luna": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
+	"gpt-6-sol": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-6-astra": { reasoning: true, input: ["text", "image"], contextWindow: 1_050_000, maxTokens: 128_000 },
 	"gpt-oss-120b-medium": { reasoning: true, input: ["text"], contextWindow: 114_000, maxTokens: 32_768 },
 	"gpt-image-1.5": { reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8_192 },
@@ -608,7 +621,8 @@ export function resolveModelMetadata(id: string): ModelMetadata {
  * - Kimi K3: low | high | max (no medium/xhigh)
  * - Grok 4.3 / 4.5 / 4.6 / 4.7: OMO may select only low | medium | high.
  *   xhigh and max stay null so the picker cannot offer them.
- * - Grok 4.20 reasoning / multi-agent: no documented effort list, so do not send one.
+ * - Grok 4.20 reasoning / multi-agent: no documented effort list. Map every
+ *   OMO level to null so the picker stays open and the request sends no effort.
  */
 const GROK_UP_TO_HIGH = {
 	off: null,
@@ -635,6 +649,20 @@ export function thinkingLevelMapFor(id: string): ThinkingLevelMap | undefined {
 	}
 	if (slug === "grok-4.7" || slug === "grok-4.6" || slug === "grok-4.5" || slug === "grok-4.3") {
 		return { ...GROK_UP_TO_HIGH };
+	}
+	if (
+		slug === "grok-4.20-0309-reasoning" ||
+		slug === "grok-4.20-multi-agent-0309"
+	) {
+		return {
+			off: null,
+			minimal: null,
+			low: null,
+			medium: null,
+			high: null,
+			xhigh: null,
+			max: null,
+		};
 	}
 	return undefined;
 }

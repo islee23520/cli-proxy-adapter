@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased - 2026-09-24
+
+- Register live CLIProxy ids missing from the table: `gpt-6-sol` at the official 1,050,000 / 128,000 window (https://developers.openai.com/api/docs/models/gpt-6-sol), Gemini 3.5 Flash-Lite and 3.6/3.7/3.8 Flash-High at the Gemini 3.x 1,048,576 / 65,536 window, `grok-imagine-video-1.5` beside its preview alias, and `grok-4.7-build-fast` at the documented 500,000 window with reasoning off (https://docs.x.ai/developers/grok-4-7).
+
 ## Unreleased - 2026-09-23
 
 - CPA credentials now come from `CLIPROXY_API_KEY`, else the `cpa` entry in `~/.omo/auth.json`; `cliproxy.json` no longer supplies an API key (upstream `fix/cpa-auth-json-credential`). Both entry shapes work: `api_key` (`key`) and `oauth` (`access` sent as Bearer).

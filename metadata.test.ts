@@ -26,6 +26,35 @@ describe("resolveModelMetadata (MODEL_METADATA SSoT)", () => {
 		expect(m.maxTokens).toBe(65_536);
 	});
 
+	test("live 2026-09-24 ids have explicit windows", () => {
+		expect(resolveModelMetadata("gpt-6-sol")).toMatchObject({
+			reasoning: true,
+			input: ["text", "image"],
+			contextWindow: 1_050_000,
+			maxTokens: 128_000,
+		});
+		expect(resolveModelMetadata("grok-4.7-build-fast")).toMatchObject({
+			reasoning: false,
+			input: ["text", "image"],
+			contextWindow: 500_000,
+			maxTokens: 65_536,
+		});
+		expect(resolveModelMetadata("grok-imagine-video-1.5")).toMatchObject({
+			reasoning: false,
+			input: ["text"],
+			contextWindow: 128_000,
+			maxTokens: 8_192,
+		});
+		for (const id of ["gemini-3.5-flash-lite", "gemini-3.6-flash-high", "gemini-3.7-flash-high", "gemini-3.8-flash-high"]) {
+			expect(resolveModelMetadata(id)).toMatchObject({
+				reasoning: true,
+				input: ["text", "image"],
+				contextWindow: 1_048_576,
+				maxTokens: 65_536,
+			});
+		}
+	});
+
 	test("unknown id falls back to infer* without throwing", () => {
 		const m = resolveModelMetadata("totally-unknown-model-xyz");
 		expect(m.contextWindow).toBeGreaterThan(0);

@@ -22,6 +22,7 @@
  * is used internally to satisfy pi's provider validation in that case.
  */
 
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -36,6 +37,15 @@ interface CLIProxyListModel {
 	object?: string;
 	created?: number;
 	owned_by?: string;
+	upstreamModelId?: string;
+	serviceTier?: "priority";
+	extraBody?: Record<string, unknown>;
+}
+
+interface ChatGptWebTurnState {
+	readonly threadId: string;
+	readonly turnId: string;
+	readonly cwd: string;
 }
 
 interface Config {
@@ -116,11 +126,24 @@ export function planRegistration(rawModels: CLIProxyListModel[], gptFastModels?:
 	};
 }
 
+const LUNA_MODEL_ID = "gpt-5.6-luna";
+const LUNA_FAST_MODEL_ID = "gpt-5.6-luna-fast";
+
 function modelsForRegistration(rawModels: CLIProxyListModel[], gptFastModels?: readonly string[]): CLIProxyListModel[] {
 	const allowed = (id: string) => gptFastModels === undefined || gptFastModels.includes(id);
-	const models = rawModels.filter((m) => !m.id.startsWith("gpt-") || !m.id.endsWith("-fast") || allowed(m.id));
+	const models = rawModels.filter((m) => !m.id.startsWith("cgw/gpt-image-") && (!m.id.startsWith("gpt-") || !m.id.endsWith("-fast") || allowed(m.id)));
 	if (allowed("gpt-6-luna-fast") && models.some((m) => m.id === "gpt-6-luna") && !models.some((m) => m.id === "gpt-6-luna-fast")) {
 		models.push({ id: "gpt-6-luna-fast", owned_by: "openai" });
+	}
+	const luna = models.find((m) => m.id === LUNA_MODEL_ID);
+	if (luna && !models.some((m) => m.id === LUNA_FAST_MODEL_ID)) {
+		models.push({
+			...luna,
+			id: LUNA_FAST_MODEL_ID,
+			upstreamModelId: LUNA_MODEL_ID,
+			serviceTier: "priority",
+			extraBody: { service_tier: "priority" },
+		});
 	}
 	return models;
 }
@@ -438,6 +461,11 @@ export function normalizeKimiToolParameterTypes(payload: unknown): unknown {
 // yet listed here; any model the proxy serves should eventually get an explicit
 // entry.
 const MODEL_METADATA: Record<string, ModelMetadata> = {
+	"cgw/light": { reasoning: false, input: ["text", "image"], contextWindow: 41_000, maxTokens: 32_768 },
+	"cgw/medium": { reasoning: false, input: ["text", "image"], contextWindow: 90_000, maxTokens: 32_768 },
+	"cgw/high": { reasoning: false, input: ["text", "image"], contextWindow: 90_000, maxTokens: 32_768 },
+	"cgw/extra-high": { reasoning: false, input: ["text", "image"], contextWindow: 111_193, maxTokens: 32_768 },
+	"cgw/pro": { reasoning: false, input: ["text", "image"], contextWindow: 112_193, maxTokens: 32_768 },
 	"claude-3-5-haiku-20241022": { reasoning: false, input: ["text", "image"], contextWindow: 128_000, maxTokens: 8_192 },
 	"claude-3-7-sonnet-20250219": { reasoning: true, input: ["text", "image"], contextWindow: 128_000, maxTokens: 8_192 },
 	"claude-haiku-4-5-20251001": { reasoning: true, input: ["text", "image"], contextWindow: 200_000, maxTokens: 64_000 },
@@ -590,6 +618,10 @@ interface PiModelConfig {
 	maxTokens: number;
 	compat: ModelCompat;
 	thinkingLevelMap?: ThinkingLevelMap;
+	upstreamModelId?: string;
+	serviceTier?: "priority";
+	extraBody?: Record<string, unknown>;
+	api?: "openai-responses";
 }
 
 function gptFastTierBaseId(id: string): string | undefined {
@@ -667,6 +699,49 @@ export function thinkingLevelMapFor(id: string): ThinkingLevelMap | undefined {
 	return undefined;
 }
 
+export function withChatGptWebTurnMetadata(payload: unknown, state: ChatGptWebTurnState): unknown {
+	if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+	const request = payload as Record<string, unknown>;
+	const input = Array.isArray(request.input) ? request.input : [];
+	let currentUserIndex = -1;
+	for (let index = input.length - 1; index >= 0; index--) {
+		const item = input[index];
+		if (item && typeof item === "object" && !Array.isArray(item) && (item as Record<string, unknown>).role === "user") {
+			currentUserIndex = index;
+			break;
+		}
+	}
+	const annotatedInput = currentUserIndex < 0 ? input : input.map((item, index) => {
+		if (index !== currentUserIndex || !item || typeof item !== "object" || Array.isArray(item)) return item;
+		const message = item as Record<string, unknown>;
+		const passthrough = message.internal_chat_message_metadata_passthrough;
+		return {
+			...message,
+			...(typeof message.id === "string" && message.id ? {} : { id: `msg_user_${state.turnId.replaceAll("-", "")}` }),
+			internal_chat_message_metadata_passthrough: {
+				...(passthrough && typeof passthrough === "object" && !Array.isArray(passthrough) ? passthrough : {}),
+				turn_id: state.turnId,
+			},
+		};
+	});
+	const metadata = request.client_metadata;
+	return {
+		...request,
+		prompt_cache_key: state.threadId,
+		client_metadata: {
+			...(metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {}),
+			"x-codex-turn-metadata": JSON.stringify({
+				thread_id: state.threadId,
+				turn_id: state.turnId,
+				request_kind: "turn",
+				sandbox: "read-only",
+				workspaces: { [state.cwd]: {} },
+			}),
+		},
+		input: annotatedInput,
+	};
+}
+
 export function toProviderModel(m: CLIProxyListModel, cfg: Config): PiModelConfig {
 	const meta = resolveModelMetadata(m.id);
 	const fastTierBaseId = gptFastTierBaseId(m.id);
@@ -693,6 +768,10 @@ export function toProviderModel(m: CLIProxyListModel, cfg: Config): PiModelConfi
 		maxTokens,
 		compat,
 		...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+		...(m.upstreamModelId ? { upstreamModelId: m.upstreamModelId } : {}),
+		...(m.serviceTier ? { serviceTier: m.serviceTier } : {}),
+		...(m.extraBody ? { extraBody: m.extraBody } : {}),
+		...(m.id.startsWith("cgw/") ? { api: "openai-responses" as const } : {}),
 	};
 }
 
@@ -874,6 +953,13 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 
 	registerFamilies(pi, cfg, models);
 	registerCommands(pi, cfg);
+	const chatGptWebThreadId = randomUUID();
+	let chatGptWebTurnId = randomUUID();
+	pi.on("before_agent_start", (_event, ctx) => {
+		if (ctx.model?.provider === PROVIDER.providerName && ctx.model.id.startsWith("cgw/")) {
+			chatGptWebTurnId = randomUUID();
+		}
+	});
 	pi.on("before_provider_request", (event, ctx) => {
 		// `event.model` is the effective request model after auth/base-url/upstream
 		// resolution; `ctx.model` is only the session model, so it is wrong for
@@ -882,6 +968,13 @@ export default async function (pi: ExtensionAPI): Promise<void> {
 		const model = requestModel(event) ?? ctx.model;
 		if (model?.provider !== PROVIDER.providerName) return;
 		const modelId = model.id.toLowerCase();
+		if (modelId.startsWith("cgw/")) {
+			return withChatGptWebTurnMetadata(event.payload, {
+				threadId: chatGptWebThreadId,
+				turnId: chatGptWebTurnId,
+				cwd: ctx.cwd,
+			});
+		}
 		if (modelId === "gpt-6-luna-fast") {
 			const payload = normalizeToolParameterTypes(event.payload) as Record<string, unknown>;
 			return { ...payload, model: "gpt-6-luna", service_tier: "priority" };

@@ -78,6 +78,171 @@ describe("normalizeKimiToolParameterTypes", () => {
 });
 
 describe("planRegistration (single cpa provider)", () => {
+	test("registers ChatGPT Web routes as Responses models and excludes injected image aliases", async () => {
+		const previousUrl = process.env.CLIPROXY_URL;
+		process.env.CLIPROXY_URL = "http://cliproxy.example";
+		const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({
+				data: [
+					{ id: "cgw/high", owned_by: "openai" },
+					{ id: "cgw/gpt-image-2", owned_by: "openai" },
+					{ id: "gpt-5.6-sol", owned_by: "openai" },
+				],
+			}), { status: 200, headers: { "content-type": "application/json" } }),
+		);
+		const registerProvider = mock(() => undefined);
+		const pi = {
+			unregisterProvider: mock(() => undefined),
+			registerProvider,
+			registerCommand: mock(() => undefined),
+			on: mock(() => undefined),
+		};
+
+		try {
+			await Reflect.apply(registerExtension, undefined, [pi]);
+			const registration = registerProvider.mock.calls[0]?.[1];
+			const high = registration?.models.find((model: { id: string }) => model.id === "cgw/high");
+			expect(high).toMatchObject({
+				api: "openai-responses",
+				reasoning: false,
+				input: ["text", "image"],
+				contextWindow: 90_000,
+			});
+			expect(registration?.models.some((model: { id: string }) => model.id === "cgw/gpt-image-2")).toBe(false);
+			expect(registration?.models.find((model: { id: string }) => model.id === "gpt-5.6-sol")?.api).toBeUndefined();
+		} finally {
+			fetchSpy.mockRestore();
+			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;
+			else process.env.CLIPROXY_URL = previousUrl;
+		}
+	});
+
+	test("injects stable ChatGPT Web thread metadata and rotates the turn per user instruction", async () => {
+		const previousUrl = process.env.CLIPROXY_URL;
+		process.env.CLIPROXY_URL = "http://cliproxy.example";
+		const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ data: [{ id: "cgw/high", owned_by: "openai" }] }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		const handlers = new Map<string, (...args: unknown[]) => unknown>();
+		const pi = {
+			unregisterProvider: mock(() => undefined),
+			registerProvider: mock(() => undefined),
+			registerCommand: mock(() => undefined),
+			on: mock((name: string, handler: (...args: unknown[]) => unknown) => handlers.set(name, handler)),
+		};
+
+		try {
+			await Reflect.apply(registerExtension, undefined, [pi]);
+			const start = handlers.get("before_agent_start");
+			const request = handlers.get("before_provider_request");
+			expect(start).toBeDefined();
+			expect(request).toBeDefined();
+			const context = { cwd: "C:\\repo", model: { provider: "cpa", id: "cgw/high" } };
+			start?.({ prompt: "first" }, context);
+			const payload = {
+				model: "cgw/high",
+				input: [
+					{ type: "message", role: "user", content: [{ type: "input_text", text: "first" }] },
+				],
+			};
+			const first = request?.({ payload, model: context.model }, context) as Record<string, unknown>;
+			const repeated = request?.({ payload, model: context.model }, context) as Record<string, unknown>;
+			const firstMetadata = JSON.parse((first.client_metadata as Record<string, string>)["x-codex-turn-metadata"]);
+			const repeatedMetadata = JSON.parse((repeated.client_metadata as Record<string, string>)["x-codex-turn-metadata"]);
+			expect(first.prompt_cache_key).toBe(firstMetadata.thread_id);
+			expect(firstMetadata).toMatchObject({ request_kind: "turn", sandbox: "read-only", workspaces: { "C:\\repo": {} } });
+			expect(repeatedMetadata.thread_id).toBe(firstMetadata.thread_id);
+			expect(repeatedMetadata.turn_id).toBe(firstMetadata.turn_id);
+			expect(((first.input as Array<Record<string, unknown>>)[0]?.internal_chat_message_metadata_passthrough as Record<string, string>).turn_id)
+				.toBe(firstMetadata.turn_id);
+
+			start?.({ prompt: "second" }, context);
+			const second = request?.({ payload, model: context.model }, context) as Record<string, unknown>;
+			const secondMetadata = JSON.parse((second.client_metadata as Record<string, string>)["x-codex-turn-metadata"]);
+			expect(secondMetadata.thread_id).toBe(firstMetadata.thread_id);
+			expect(secondMetadata.turn_id).not.toBe(firstMetadata.turn_id);
+			expect(request?.(
+				{ payload, model: { provider: "cpa", id: "gpt-5.6-sol" } },
+				{ ...context, model: { provider: "cpa", id: "gpt-5.6-sol" } },
+			)).toBe(payload);
+		} finally {
+			fetchSpy.mockRestore();
+			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;
+			else process.env.CLIPROXY_URL = previousUrl;
+		}
+	});
+
+	test("synthesizes Luna Fast as a priority alias of base Luna when the proxy does not expose Fast", async () => {
+		const previousUrl = process.env.CLIPROXY_URL;
+		process.env.CLIPROXY_URL = "http://cliproxy.example";
+		const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ data: [{ id: "gpt-5.6-luna", owned_by: "openai" }] }), {
+				status: 200,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		const registerProvider = mock(() => undefined);
+		const pi = {
+			unregisterProvider: mock(() => undefined),
+			registerProvider,
+			registerCommand: mock(() => undefined),
+			on: mock(() => undefined),
+		};
+
+		try {
+			await Reflect.apply(registerExtension, undefined, [pi]);
+			const registration = registerProvider.mock.calls[0]?.[1];
+			const fast = registration?.models.filter((model: { id: string }) => model.id === "gpt-5.6-luna-fast");
+			expect(fast).toHaveLength(1);
+			expect(fast?.[0]).toMatchObject({
+				id: "gpt-5.6-luna-fast",
+				upstreamModelId: "gpt-5.6-luna",
+				serviceTier: "priority",
+				extraBody: { service_tier: "priority" },
+			});
+		} finally {
+			fetchSpy.mockRestore();
+			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;
+			else process.env.CLIPROXY_URL = previousUrl;
+		}
+	});
+
+	test("keeps one native Luna Fast route when the proxy already exposes it", async () => {
+		const previousUrl = process.env.CLIPROXY_URL;
+		process.env.CLIPROXY_URL = "http://cliproxy.example";
+		const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({
+				data: [
+					{ id: "gpt-5.6-luna", owned_by: "openai" },
+					{ id: "gpt-5.6-luna-fast", owned_by: "openai" },
+				],
+			}), { status: 200, headers: { "content-type": "application/json" } }),
+		);
+		const registerProvider = mock(() => undefined);
+		const pi = {
+			unregisterProvider: mock(() => undefined),
+			registerProvider,
+			registerCommand: mock(() => undefined),
+			on: mock(() => undefined),
+		};
+
+		try {
+			await Reflect.apply(registerExtension, undefined, [pi]);
+			const registration = registerProvider.mock.calls[0]?.[1];
+			const fast = registration?.models.filter((model: { id: string }) => model.id === "gpt-5.6-luna-fast");
+			expect(fast).toHaveLength(1);
+			expect(fast?.[0]?.upstreamModelId).toBeUndefined();
+			expect(fast?.[0]?.serviceTier).toBeUndefined();
+		} finally {
+			fetchSpy.mockRestore();
+			if (previousUrl === undefined) delete process.env.CLIPROXY_URL;
+			else process.env.CLIPROXY_URL = previousUrl;
+		}
+	});
+
 	test("GPT fast allowlist can expose all, none, or only selected models", () => {
 		const rawModels = [
 			{ id: "gpt-5.6-sol-fast" }, { id: "gpt-5.4-mini-fast" }, { id: "gpt-6-astra-fast" },
